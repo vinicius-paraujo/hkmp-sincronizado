@@ -133,7 +133,12 @@ internal class EntityManager {
         IsSceneHost = true;
 
         foreach (var entity in _entities.Values) {
-            entity.MakeHost();
+            // One entity failing must not leave the remaining ones, such as a boss, without a host.
+            try {
+                entity.MakeHost();
+            } catch (Exception e) {
+                Logger.Error($"Could not make entity ({entity.Id}, {entity.Type}) a host entity:\n{e}");
+            }
         }
     }
 

@@ -944,6 +944,21 @@ internal class Entity {
             return;
         }
 
+        // The host object can be destroyed while the client object still exists, for example when a battle
+        // scene destroys its enemies on the previous scene host. There is nothing left to hand over then.
+        if (Object.Host == null) {
+            Object.Client.SetActive(false);
+
+            _isControlled = false;
+
+            foreach (var component in _components.Values) {
+                component.IsControlled = false;
+            }
+
+            Logger.Debug("  Host object null, disabling client object and returning");
+            return;
+        }
+
         if (_hasParent) {
             Logger.Debug("  Entity has parent, only setting local transform");
 
