@@ -681,13 +681,13 @@
         },
         "elderbugRequestedFlower": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "elderbugGaveFlower": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1221,7 +1221,7 @@
         },
         "jijiShadeOffered": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1269,7 +1269,7 @@
         },
         "jinnEggsSold": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
@@ -1419,7 +1419,7 @@
         },
         "hornetFountainEncounter": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1467,73 +1467,73 @@
         },
         "mothDeparted": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "completedRGDreamPlant": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward1": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward2": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward3": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward4": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward5": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward5b": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward6": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward7": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward8": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "dreamReward9": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1545,7 +1545,7 @@
         },
         "bankerAccountPurchased": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1623,7 +1623,7 @@
         },
         "salubraBlessing": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1671,7 +1671,7 @@
         },
         "nailsmithCliff": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1683,7 +1683,7 @@
         },
         "nailsmithSpared": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1821,7 +1821,7 @@
         },
         "paidLegEater": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1881,7 +1881,7 @@
         },
         "legEaterLeft": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1893,13 +1893,13 @@
         },
         "tukEggPrice": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
         "tukDungEgg": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -1965,7 +1965,7 @@
         },
         "bigCatHitTail": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -2073,13 +2073,13 @@
         },
         "maskmakerUnmasked1": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "maskmakerUnmasked2": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -2247,13 +2247,13 @@
         },
         "xunFlowerBroken": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "xunFlowerBrokeTimes": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
@@ -2265,7 +2265,7 @@
         },
         "xunRewardGiven": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -2375,7 +2375,7 @@
         },
         "ranAway": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -2387,37 +2387,37 @@
         },
         "colosseumBronzeOpened": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "colosseumBronzeCompleted": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "colosseumSilverOpened": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "colosseumSilverCompleted": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "colosseumGoldOpened": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "colosseumGoldCompleted": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -3363,7 +3363,7 @@
         },
         "newDataCrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3382,7 +3382,7 @@
         },
         "newDataBuzzer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3401,7 +3401,7 @@
         },
         "newDataBouncer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3420,7 +3420,7 @@
         },
         "newDataClimber": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3439,7 +3439,7 @@
         },
         "newDataHopper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3458,7 +3458,7 @@
         },
         "newDataWorm": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3477,7 +3477,7 @@
         },
         "newDataSpitter": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3496,7 +3496,7 @@
         },
         "newDataHatcher": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3515,7 +3515,7 @@
         },
         "newDataHatchling": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3534,7 +3534,7 @@
         },
         "newDataZombieRunner": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3553,7 +3553,7 @@
         },
         "newDataZombieHornhead": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3572,7 +3572,7 @@
         },
         "newDataZombieLeaper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3591,7 +3591,7 @@
         },
         "newDataZombieBarger": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3610,7 +3610,7 @@
         },
         "newDataZombieShield": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3629,7 +3629,7 @@
         },
         "newDataZombieGuard": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3648,7 +3648,7 @@
         },
         "newDataBigBuzzer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3667,7 +3667,7 @@
         },
         "newDataBigFly": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3686,7 +3686,7 @@
         },
         "newDataMawlek": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3705,7 +3705,7 @@
         },
         "newDataFalseKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3724,7 +3724,7 @@
         },
         "newDataRoller": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3743,7 +3743,7 @@
         },
         "newDataBlocker": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3762,7 +3762,7 @@
         },
         "newDataPrayerSlug": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3781,7 +3781,7 @@
         },
         "newDataMenderBug": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3800,7 +3800,7 @@
         },
         "newDataMossmanRunner": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3819,7 +3819,7 @@
         },
         "newDataMossmanShaker": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3838,7 +3838,7 @@
         },
         "newDataMosquito": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3857,7 +3857,7 @@
         },
         "newDataBlobFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3876,7 +3876,7 @@
         },
         "newDataFungifiedZombie": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3895,7 +3895,7 @@
         },
         "newDataPlantShooter": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3914,7 +3914,7 @@
         },
         "newDataMossCharger": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3933,7 +3933,7 @@
         },
         "newDataMegaMossCharger": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3952,7 +3952,7 @@
         },
         "newDataSnapperTrap": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3971,7 +3971,7 @@
         },
         "newDataMossKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -3990,7 +3990,7 @@
         },
         "newDataGrassHopper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4009,7 +4009,7 @@
         },
         "newDataAcidFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4028,7 +4028,7 @@
         },
         "newDataAcidWalker": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4047,7 +4047,7 @@
         },
         "newDataMossFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4066,7 +4066,7 @@
         },
         "newDataMossKnightFat": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4085,7 +4085,7 @@
         },
         "newDataMossWalker": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4104,7 +4104,7 @@
         },
         "newDataInfectedKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4123,7 +4123,7 @@
         },
         "newDataLazyFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4142,7 +4142,7 @@
         },
         "newDataZapBug": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4161,7 +4161,7 @@
         },
         "newDataJellyfish": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4180,7 +4180,7 @@
         },
         "newDataJellyCrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4199,7 +4199,7 @@
         },
         "newDataMegaJellyfish": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4218,7 +4218,7 @@
         },
         "newDataFungoonBaby": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4237,7 +4237,7 @@
         },
         "newDataMushroomTurret": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4256,7 +4256,7 @@
         },
         "newDataMantis": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4275,7 +4275,7 @@
         },
         "newDataMushroomRoller": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4294,7 +4294,7 @@
         },
         "newDataMushroomBrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4313,7 +4313,7 @@
         },
         "newDataMushroomBaby": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4332,7 +4332,7 @@
         },
         "newDataMantisFlyerChild": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4351,7 +4351,7 @@
         },
         "newDataFungusFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4369,7 +4369,7 @@
         },
         "newDataFungCrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4388,7 +4388,7 @@
         },
         "newDataMantisLord": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4407,7 +4407,7 @@
         },
         "newDataBlackKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4426,7 +4426,7 @@
         },
         "newDataElectricMage": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4445,7 +4445,7 @@
         },
         "newDataMage": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4464,7 +4464,7 @@
         },
         "newDataMageKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4483,7 +4483,7 @@
         },
         "newDataRoyalDandy": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4502,7 +4502,7 @@
         },
         "newDataRoyalCoward": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4521,7 +4521,7 @@
         },
         "newDataRoyalPlumper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4540,7 +4540,7 @@
         },
         "newDataFlyingSentrySword": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4559,7 +4559,7 @@
         },
         "newDataFlyingSentryJavelin": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4578,7 +4578,7 @@
         },
         "newDataSentry": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4597,7 +4597,7 @@
         },
         "newDataSentryFat": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4616,7 +4616,7 @@
         },
         "newDataMageBlob": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4635,7 +4635,7 @@
         },
         "newDataGreatShieldZombie": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4654,7 +4654,7 @@
         },
         "newDataJarCollector": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4673,7 +4673,7 @@
         },
         "newDataMageBalloon": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4692,7 +4692,7 @@
         },
         "newDataMageLord": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4711,7 +4711,7 @@
         },
         "newDataGorgeousHusk": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4730,7 +4730,7 @@
         },
         "newDataFlipHopper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4749,7 +4749,7 @@
         },
         "newDataFlukeman": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4768,7 +4768,7 @@
         },
         "newDataInflater": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4787,7 +4787,7 @@
         },
         "newDataFlukefly": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4806,7 +4806,7 @@
         },
         "newDataFlukeMother": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4825,7 +4825,7 @@
         },
         "newDataDungDefender": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4844,7 +4844,7 @@
         },
         "newDataCrystalCrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4863,7 +4863,7 @@
         },
         "newDataCrystalFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4882,7 +4882,7 @@
         },
         "newDataLaserBug": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4901,7 +4901,7 @@
         },
         "newDataBeamMiner": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4920,7 +4920,7 @@
         },
         "newDataZombieMiner": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4939,7 +4939,7 @@
         },
         "newDataMegaBeamMiner": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4958,7 +4958,7 @@
         },
         "newDataMinesCrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4977,7 +4977,7 @@
         },
         "newDataAngryBuzzer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -4996,7 +4996,7 @@
         },
         "newDataBurstingBouncer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5015,7 +5015,7 @@
         },
         "newDataBurstingZombie": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5034,7 +5034,7 @@
         },
         "newDataSpittingZombie": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5053,7 +5053,7 @@
         },
         "newDataBabyCentipede": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5072,7 +5072,7 @@
         },
         "newDataBigCentipede": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5091,7 +5091,7 @@
         },
         "newDataCentipedeHatcher": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5110,7 +5110,7 @@
         },
         "newDataLesserMawlek": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5129,7 +5129,7 @@
         },
         "newDataSlashSpider": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5148,7 +5148,7 @@
         },
         "newDataSpiderCorpse": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5167,7 +5167,7 @@
         },
         "newDataShootSpider": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5186,7 +5186,7 @@
         },
         "newDataMiniSpider": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5205,7 +5205,7 @@
         },
         "newDataSpiderFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5224,7 +5224,7 @@
         },
         "newDataMimicSpider": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5243,7 +5243,7 @@
         },
         "newDataBeeHatchling": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5262,7 +5262,7 @@
         },
         "newDataBeeStinger": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5281,7 +5281,7 @@
         },
         "newDataBigBee": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5300,7 +5300,7 @@
         },
         "newDataHiveKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5319,7 +5319,7 @@
         },
         "newDataBlowFly": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5338,7 +5338,7 @@
         },
         "newDataCeilingDropper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5357,7 +5357,7 @@
         },
         "newDataGiantHopper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5376,7 +5376,7 @@
         },
         "newDataGrubMimic": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5395,7 +5395,7 @@
         },
         "newDataMawlekTurret": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5414,7 +5414,7 @@
         },
         "newDataOrangeScuttler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5433,7 +5433,7 @@
         },
         "newDataHealthScuttler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5452,7 +5452,7 @@
         },
         "newDataPigeon": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5471,7 +5471,7 @@
         },
         "newDataZombieHive": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5490,7 +5490,7 @@
         },
         "newDataDreamGuard": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5509,7 +5509,7 @@
         },
         "newDataHornet": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5528,7 +5528,7 @@
         },
         "newDataAbyssCrawler": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5547,7 +5547,7 @@
         },
         "newDataSuperSpitter": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5566,7 +5566,7 @@
         },
         "newDataSibling": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5585,7 +5585,7 @@
         },
         "newDataPalaceFly": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5604,7 +5604,7 @@
         },
         "newDataEggSac": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5623,7 +5623,7 @@
         },
         "newDataMummy": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5642,7 +5642,7 @@
         },
         "newDataOrangeBalloon": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5661,7 +5661,7 @@
         },
         "newDataAbyssTendril": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5680,7 +5680,7 @@
         },
         "newDataHeavyMantis": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5699,7 +5699,7 @@
         },
         "newDataTraitorLord": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5718,7 +5718,7 @@
         },
         "newDataMantisHeavyFlyer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5737,7 +5737,7 @@
         },
         "newDataGardenZombie": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5756,7 +5756,7 @@
         },
         "newDataRoyalGuard": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5775,7 +5775,7 @@
         },
         "newDataWhiteRoyal": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5800,7 +5800,7 @@
         },
         "newDataOblobble": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5819,7 +5819,7 @@
         },
         "newDataZote": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5838,7 +5838,7 @@
         },
         "newDataBlobble": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5857,7 +5857,7 @@
         },
         "newDataColMosquito": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5876,7 +5876,7 @@
         },
         "newDataColRoller": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5895,7 +5895,7 @@
         },
         "newDataColFlyingSentry": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5914,7 +5914,7 @@
         },
         "newDataColMiner": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5933,7 +5933,7 @@
         },
         "newDataColShield": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5952,7 +5952,7 @@
         },
         "newDataColWorm": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5971,7 +5971,7 @@
         },
         "newDataColHopper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -5990,7 +5990,7 @@
         },
         "newDataLobsterLancer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6009,7 +6009,7 @@
         },
         "newDataGhostAladar": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6028,7 +6028,7 @@
         },
         "newDataGhostXero": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6047,7 +6047,7 @@
         },
         "newDataGhostHu": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6066,7 +6066,7 @@
         },
         "newDataGhostMarmu": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6085,7 +6085,7 @@
         },
         "newDataGhostNoEyes": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6104,7 +6104,7 @@
         },
         "newDataGhostMarkoth": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6123,7 +6123,7 @@
         },
         "newDataGhostGalien": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6142,7 +6142,7 @@
         },
         "newDataWhiteDefender": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6161,7 +6161,7 @@
         },
         "newDataGreyPrince": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6180,7 +6180,7 @@
         },
         "newDataZotelingBalloon": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6199,7 +6199,7 @@
         },
         "newDataZotelingHopper": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6218,7 +6218,7 @@
         },
         "newDataZotelingBuzzer": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6237,7 +6237,7 @@
         },
         "newDataHollowKnight": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6256,7 +6256,7 @@
         },
         "newDataFinalBoss": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6275,7 +6275,7 @@
         },
         "newDataHunterMark": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6294,7 +6294,7 @@
         },
         "newDataFlameBearerSmall": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6313,7 +6313,7 @@
         },
         "newDataFlameBearerMed": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6332,7 +6332,7 @@
         },
         "newDataFlameBearerLarge": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6351,7 +6351,7 @@
         },
         "newDataGrimm": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6370,7 +6370,7 @@
         },
         "newDataNightmareGrimm": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6389,7 +6389,7 @@
         },
         "newDataBindingSeal": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6408,7 +6408,7 @@
         },
         "newDataFatFluke": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6427,7 +6427,7 @@
         },
         "newDataPaleLurker": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6446,7 +6446,7 @@
         },
         "newDataNailBros": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6465,7 +6465,7 @@
         },
         "newDataPaintmaster": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6484,7 +6484,7 @@
         },
         "newDataNailsage": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6503,7 +6503,7 @@
         },
         "newDataHollowKnightPrime": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6522,7 +6522,7 @@
         },
         "newDataGodseekerMask": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6541,7 +6541,7 @@
         },
         "newDataVoidIdol_1": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6560,7 +6560,7 @@
         },
         "newDataVoidIdol_2": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6579,7 +6579,7 @@
         },
         "newDataVoidIdol_3": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
@@ -6592,7 +6592,7 @@
         },
         "grubRewards": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
@@ -6622,7 +6622,7 @@
         },
         "falseKnightOrbsCollected": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -6682,7 +6682,7 @@
         },
         "mageLordOrbsCollected": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -6694,7 +6694,7 @@
         },
         "infectedKnightOrbsCollected": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -6706,7 +6706,7 @@
         },
         "whiteDefenderOrbsCollected": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -6732,7 +6732,7 @@
         },
         "greyPrinceOrbsCollected": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -6864,115 +6864,115 @@
         },
         "visitedCrossroads": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedGreenpath": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedFungus": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedHive": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedCrossroadsInfected": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedRuins": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedMines": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedRoyalGardens": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedFogCanyon": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedDeepnest": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedRestingGrounds": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedWaterways": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedAbyss": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedOutskirts": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedWhitePalace": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedCliffs": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedAbyssLower": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedGodhome": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "visitedMines10": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -7112,7 +7112,7 @@
         },
         "scenesEncounteredDreamPlantC": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Collections.Generic.List`1[System.String]"
         },
@@ -7124,85 +7124,85 @@
         },
         "mapDirtmouth": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapCrossroads": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapGreenpath": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapFogCanyon": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapRoyalGardens": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapFungalWastes": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapCity": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapWaterways": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapMines": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapDeepnest": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapCliffs": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapOutskirts": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapRestingGrounds": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "mapAbyss": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -7310,61 +7310,61 @@
         },
         "spareMarkers_r": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
         "spareMarkers_b": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
         "spareMarkers_y": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
         "spareMarkers_w": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
         "placedMarkers_r": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Collections.Generic.List`1[Hkmp.Math.Vector3]"
         },
         "placedMarkers_b": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Collections.Generic.List`1[Hkmp.Math.Vector3]"
         },
         "placedMarkers_y": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Collections.Generic.List`1[Hkmp.Math.Vector3]"
         },
         "placedMarkers_w": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Collections.Generic.List`1[Hkmp.Math.Vector3]"
         },
         "openedTramLower": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
         "openedTramRestingGrounds": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -7394,7 +7394,7 @@
         },
         "vesselFragStagNest": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -7412,7 +7412,7 @@
         },
         "eggTempleVisited": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -7790,7 +7790,7 @@
         },
         "spiderCapture": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -7899,13 +7899,13 @@
         },
         "fountainGeo": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Int32"
         },
         "fountainVesselSummoned": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -8146,7 +8146,7 @@
         },
         "nymmMissedEggOpen": {
             "Sync": true,
-            "SyncType": "Player",
+            "SyncType": "Server",
             "IgnoreSceneHost": true,
             "VarType": "System.Boolean"
         },
@@ -8236,7 +8236,7 @@
         },
         "newDatTraitorLord": {
             "Sync": true,
-            "SyncType": "Server",
+            "SyncType": "Player",
             "IgnoreSceneHost": false,
             "VarType": "System.Boolean"
         },
