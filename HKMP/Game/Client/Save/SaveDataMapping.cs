@@ -222,6 +222,10 @@ internal class SaveDataMapping {
         /// </summary>
         public bool IgnoreSceneHost { get; set; }
         /// <summary>
+        /// Whether this is a room object that returns to its initial state when a player rests at a bench.
+        /// </summary>
+        public bool SemiPersistent { get; set; }
+        /// <summary>
         /// The type of the variable that holds this value.
         /// </summary>
         public string VarType { get; set; }

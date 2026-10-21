@@ -1781,6 +1781,27 @@ internal abstract class ServerManager : IServerManager {
     }
 
     /// <inheritdoc />
+    public void ResetSemiPersistentItems() {
+        var mapping = SaveDataMapping.Instance;
+        var removed = 0;
+        foreach (var pair in mapping.PersistentBoolVarProperties) {
+            if (pair.Value.SemiPersistent && mapping.PersistentBoolIndices.TryGetValue(pair.Key, out var index)
+                && ServerSaveData.GlobalSaveData.Remove(index)) {
+                removed++;
+            }
+        }
+
+        foreach (var pair in mapping.PersistentIntVarProperties) {
+            if (pair.Value.SemiPersistent && mapping.PersistentIntIndices.TryGetValue(pair.Key, out var index)
+                && ServerSaveData.GlobalSaveData.Remove(index)) {
+                removed++;
+            }
+        }
+
+        Logger.Info($"Reset {removed} stored semi-persistent items");
+    }
+
+    /// <inheritdoc />
     public void DisconnectPlayer(ushort id, DisconnectReason reason) {
         if (!_playerData.TryGetValue(id, out _)) {
             throw new ArgumentException("There is no player connected with the given ID");

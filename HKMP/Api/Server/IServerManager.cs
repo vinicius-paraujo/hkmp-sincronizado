@@ -70,6 +70,13 @@ public interface IServerManager {
     void DisconnectPlayer(ushort id, DisconnectReason reason);
 
     /// <summary>
+    /// Forget the stored state of every semi-persistent room object, such as most enemies, as resting at a bench
+    /// does in a single-player game. Players that enter those rooms afterwards find the objects in their initial
+    /// state, unless a player changes them again.
+    /// </summary>
+    void ResetSemiPersistentItems();
+
+    /// <summary>
     /// Apply the given <see cref="ServerSettings"/> to the game. Will copy all property values to the used
     /// <see cref="ServerSettings"/> instance and network the changes to all players.
     /// </summary>
