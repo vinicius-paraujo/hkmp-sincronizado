@@ -91,5 +91,6 @@ internal enum EntityComponentType : ushort {
     Music,
     FlipPlatform,
     DreamPlatform,
-    HazardRespawn
+    HazardRespawn,
+    Health
 }

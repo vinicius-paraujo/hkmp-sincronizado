@@ -8,7 +8,6 @@ namespace Hkmp.Game.Client.Entity.Component;
 
 // TODO: make sure that the data sent on death is saved as state on the server, so new clients entering
 // scenes can start with the entity disabled/already dead
-// TODO: periodically (or on hit) sync the health of the entity so on scene host transfer we can reset health
 /// <inheritdoc />
 /// This component manages the <see cref="HealthManager"/> component of the entity.
 internal class HealthManagerComponent : EntityComponent {
@@ -31,6 +30,8 @@ internal class HealthManagerComponent : EntityComponent {
     /// The last value for the "invincibleFromDirection" variable of the health manager.
     /// </summary>
     private int _lastInvincibleFromDirection;
+    private int _lastHealth = int.MinValue;
+    private int? _receivedHealth;
 
     public HealthManagerComponent(
         NetClient netClient,
@@ -107,6 +108,8 @@ internal class HealthManagerComponent : EntityComponent {
     /// Callback method for updates to check whether invincibility changes.
     /// </summary>
     private void OnUpdate() {
+        if (IsControlled || _healthManager.Host == null) return;
+        PublishHealth();
         var data = new EntityNetworkData {
             Type = EntityComponentType.Invincibility
         };
@@ -134,6 +137,26 @@ internal class HealthManagerComponent : EntityComponent {
     
     /// <inheritdoc />
     public override void InitializeHost() {
+        PublishHealth();
+    }
+
+    private void PublishHealth() {
+        if (_healthManager.Host == null || _healthManager.Host.hp == _lastHealth) return;
+        _lastHealth = _healthManager.Host.hp;
+        var data = new EntityNetworkData { Type = EntityComponentType.Health };
+        data.Packet.Write(_lastHealth);
+        SendData(data);
+    }
+
+    internal void RestoreHealth() {
+        // Enabling the original object and restoring its FSM can write initial health again.
+        // Apply the authoritative snapshot afterwards, without changing the replica's local hit feedback.
+        if (_receivedHealth.HasValue && _healthManager.Host != null) {
+            _healthManager.Host.hp = _receivedHealth.Value;
+            _receivedHealth = null;
+        }
+        _lastHealth = int.MinValue;
+        PublishHealth();
     }
 
     /// <inheritdoc />
@@ -145,7 +168,9 @@ internal class HealthManagerComponent : EntityComponent {
             return;
         }
 
-        if (data.Type == EntityComponentType.Death) {
+        if (data.Type == EntityComponentType.Health) {
+            _receivedHealth = data.Packet.ReadInt();
+        } else if (data.Type == EntityComponentType.Death) {
             var attackDirection = new float?();
             if (data.Packet.ReadBool()) {
                 attackDirection = data.Packet.ReadFloat();

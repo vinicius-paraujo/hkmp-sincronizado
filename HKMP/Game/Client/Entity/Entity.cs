@@ -355,6 +355,7 @@ internal class Entity {
             );
             _components[EntityComponentType.Death] = hmComponent;
             _components[EntityComponentType.Invincibility] = hmComponent;
+            _components[EntityComponentType.Health] = hmComponent;
 
             // Check if the object from the health manager is in any of the colosseum trial scenes and remove the
             // geo drops from them if so
@@ -1090,6 +1091,10 @@ internal class Entity {
             state.Actions = newActions;
             fsm.SetState(snapshot.CurrentState);
             state.Actions = oldActions;
+        }
+
+        if (_components.TryGetValue(EntityComponentType.Health, out var health)) {
+            ((HealthManagerComponent)health).RestoreHealth();
         }
     }
 
