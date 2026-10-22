@@ -19,9 +19,10 @@ internal class DtlsClient {
     public const int MaxPacketSize = 1400;
 
     /// <summary>
-    /// The maximum time the DTLS handshake can take in milliseconds before timing out.
+    /// The maximum time the DTLS handshake can take in milliseconds before timing out. A tunnel adds round
+    /// trips and occasional stalls to every handshake flight.
     /// </summary>
-    public const int DtlsHandshakeTimeoutMillis = 5000;
+    public const int DtlsHandshakeTimeoutMillis = 15000;
 
     /// <summary>
     /// The socket instance for the underlying networking.

@@ -61,6 +61,11 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     private readonly ConcurrentDictionary<ushort, ServerPlayerData> _playerData;
 
+    /// <summary>
+    /// IDs of the players that stopped sending updates and have not resumed yet.
+    /// </summary>
+    private readonly ConcurrentDictionary<ushort, byte> _silentPlayers = new ConcurrentDictionary<ushort, byte>();
+
     private readonly ConcurrentDictionary<ServerEntityKey, ServerEntityData> _entityData;
     
     /// <summary>
@@ -221,6 +226,8 @@ internal abstract class ServerManager : IServerManager {
     public virtual void Initialize() {
         // Register a timeout handler
         _netServer.ClientTimeoutEvent += OnClientTimeout;
+        _netServer.ClientSilenceEvent += OnClientSilence;
+        _netServer.ClientResumeEvent += id => _silentPlayers.TryRemove(id, out _);
 
         // Register server shutdown handler
         _netServer.ShutdownEvent += OnServerShutdown;
@@ -1095,6 +1102,11 @@ internal abstract class ServerManager : IServerManager {
 
         var username = playerData.Username;
 
+        // The leave-scene handling below runs after the player is removed from the mapping and so never reaches
+        // its scene host transfer; without this, a room whose host disconnects freezes for everyone left in it.
+        TransferSceneHost(id);
+        _silentPlayers.TryRemove(id, out _);
+
         foreach (var idPlayerDataPair in _playerData) {
             if (idPlayerDataPair.Key == id) {
                 continue;
@@ -1317,15 +1329,23 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
-        // Check whether the username is not already in use
-        foreach (var existingPlayerData in _playerData.Values) {
-            if (existingPlayerData.Username.ToLower().Equals(clientInfo.Username.ToLower())) {
+        // Check whether the username is not already in use. The same player coming back, proven by the auth key,
+        // replaces the session it left behind: after a tunnel reconnects, the old one lingers until it times out.
+        foreach (var existing in _playerData) {
+            if (!existing.Value.Username.ToLower().Equals(clientInfo.Username.ToLower())) {
+                continue;
+            }
+
+            if (existing.Value.AuthKey != clientInfo.AuthKey) {
                 Logger.Debug("  Client username is already in use, rejected connection");
-                
+
                 serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
                 serverInfo.ConnectionRejectedMessage = "Username already in use";
                 return;
             }
+
+            Logger.Info($"  Player {existing.Key} is reconnecting, replacing the previous session");
+            ProcessPlayerDisconnect(existing.Key);
         }
 
         var addonData = clientInfo.AddonData;
@@ -1421,6 +1441,48 @@ internal abstract class ServerManager : IServerManager {
         } catch (Exception e) {
             Logger.Error($"Exception thrown while invoking PlayerConnect event:\n{e}");
         }
+    }
+
+    /// <summary>
+    /// Callback method for when a client stops sending updates. A stalled scene host would freeze its room for
+    /// everyone else until the connection times out, so the role moves to another player in the room right away.
+    /// The stalled player does not get it back when it resumes.
+    /// </summary>
+    /// <param name="id">The ID of the client.</param>
+    private void OnClientSilence(ushort id) {
+        if (!_playerData.ContainsKey(id)) {
+            return;
+        }
+
+        Logger.Info($"Player {id} stopped sending updates");
+        _silentPlayers[id] = 0;
+        TransferSceneHost(id);
+    }
+
+    /// <summary>
+    /// Move the scene host role of the given player to another player in the same scene, preferring one that is
+    /// still sending updates. Nothing changes when no one else is in the scene.
+    /// </summary>
+    /// <param name="id">The ID of the current scene host.</param>
+    private void TransferSceneHost(ushort id) {
+        if (!FullSynchronisation || !_playerData.TryGetValue(id, out var playerData) || !playerData.IsSceneHost) {
+            return;
+        }
+
+        var sceneName = playerData.CurrentScene;
+        var candidates = _playerData
+            .Where(pair => pair.Key != id && pair.Value.CurrentScene == sceneName)
+            .OrderBy(pair => _silentPlayers.ContainsKey(pair.Key) ? 1 : 0)
+            .ToList();
+        if (candidates.Count == 0) {
+            return;
+        }
+
+        var (newHostId, newHost) = (candidates[0].Key, candidates[0].Value);
+        playerData.IsSceneHost = false;
+        newHost.IsSceneHost = true;
+        _netServer.GetUpdateManagerForClient(newHostId)?.SetSceneHostTransfer(sceneName);
+        Logger.Info($"Scene host of {sceneName} moved from {id} to {newHostId}");
     }
 
     /// <summary>

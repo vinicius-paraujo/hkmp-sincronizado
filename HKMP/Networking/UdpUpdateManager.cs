@@ -26,9 +26,17 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
     /// <summary>
-    /// The time in milliseconds to disconnect after not receiving any updates.
+    /// The time in milliseconds to disconnect after not receiving any updates. Players often connect through
+    /// tunnels that stall for several seconds and then recover, so a short pause must not end the session.
     /// </summary>
-    private const int ConnectionTimeout = 5000;
+    private const int ConnectionTimeout = 30000;
+
+    /// <summary>
+    /// The time in milliseconds without updates after which the other side counts as stalled. It is the old
+    /// disconnect limit: long enough to ignore ordinary jitter, short enough that a stalled scene host is replaced
+    /// before the room visibly freezes for the other players.
+    /// </summary>
+    private const int SilenceTimeout = 5000;
 
     /// <summary>
     /// The MTU (maximum transfer unit) to use to send packets with. If the length of a packet exceeds this, we break
@@ -85,6 +93,16 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private readonly Timer _heartBeatTimer;
 
     /// <summary>
+    /// Timer for noticing that the other side went silent, well before the connection times out.
+    /// </summary>
+    private readonly Timer _silenceTimer;
+
+    /// <summary>
+    /// Whether the silence event was raised and no packet has arrived since.
+    /// </summary>
+    private volatile bool _silent;
+
+    /// <summary>
     /// The last used send rate for the send timer. Used to check whether the interval of the timers needs to be
     /// updated.
     /// </summary>
@@ -116,6 +134,16 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public event Action TimeoutEvent;
 
     /// <summary>
+    /// Event that is called when no update has arrived for <see cref="SilenceTimeout"/> milliseconds.
+    /// </summary>
+    public event Action SilenceEvent;
+
+    /// <summary>
+    /// Event that is called when an update arrives after <see cref="SilenceEvent"/> was raised.
+    /// </summary>
+    public event Action ResumeEvent;
+
+    /// <summary>
     /// Construct the update manager with a UDP socket.
     /// </summary>
     protected UdpUpdateManager() {
@@ -137,6 +165,12 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             Interval = ConnectionTimeout
         };
         _heartBeatTimer.Elapsed += OnHeartBeatTimerElapsed;
+
+        _silenceTimer = new Timer {
+            AutoReset = false,
+            Interval = SilenceTimeout
+        };
+        _silenceTimer.Elapsed += OnSilenceTimerElapsed;
     }
 
     /// <summary>
@@ -147,6 +181,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         _lastSendRate = CurrentSendRate;
         _sendTimer.Start();
         _heartBeatTimer.Start();
+        _silenceTimer.Start();
 
         _isUpdating = true;
     }
@@ -168,6 +203,8 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
 
         _sendTimer.Stop();
         _heartBeatTimer.Stop();
+        _silenceTimer.Stop();
+        _silent = false;
     }
 
     /// <summary>
@@ -196,6 +233,13 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         // Reset the heart beat timer, as we have received a packet and the connection is alive
         _heartBeatTimer.Stop();
         _heartBeatTimer.Start();
+        _silenceTimer.Stop();
+        _silenceTimer.Start();
+
+        if (_silent) {
+            _silent = false;
+            ResumeEvent?.Invoke();
+        }
     }
 
     /// <summary>
@@ -287,6 +331,14 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private void OnHeartBeatTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
         // The timer has surpassed the connection timeout value, so we call the timeout event
         TimeoutEvent?.Invoke();
+    }
+
+    /// <summary>
+    /// Callback method for when the silence timer elapses. Will invoke the silence event once per silence.
+    /// </summary>
+    private void OnSilenceTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
+        _silent = true;
+        SilenceEvent?.Invoke();
     }
 
     /// <summary>

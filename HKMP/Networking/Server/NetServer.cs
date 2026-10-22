@@ -76,6 +76,16 @@ internal class NetServer : INetServer {
     public event Action<ushort> ClientTimeoutEvent;
 
     /// <summary>
+    /// Event that is called when a registered client stops sending updates for a few seconds.
+    /// </summary>
+    public event Action<ushort> ClientSilenceEvent;
+
+    /// <summary>
+    /// Event that is called when a client that went silent sends updates again.
+    /// </summary>
+    public event Action<ushort> ClientResumeEvent;
+
+    /// <summary>
     /// Event that is called when the server shuts down.
     /// </summary>
     public event Action ShutdownEvent;
@@ -206,6 +216,16 @@ internal class NetServer : INetServer {
         netServerClient.ConnectionManager.StartAcceptingConnection();
 
         netServerClient.UpdateManager.TimeoutEvent += () => HandleClientTimeout(netServerClient);
+        netServerClient.UpdateManager.SilenceEvent += () => {
+            if (netServerClient.IsRegistered) {
+                ClientSilenceEvent?.Invoke(netServerClient.Id);
+            }
+        };
+        netServerClient.UpdateManager.ResumeEvent += () => {
+            if (netServerClient.IsRegistered) {
+                ClientResumeEvent?.Invoke(netServerClient.Id);
+            }
+        };
         netServerClient.UpdateManager.StartUpdates();
 
         _clientsByEndPoint.TryAdd(dtlsServerClient.EndPoint, netServerClient);

@@ -51,6 +51,16 @@ internal class NetClient : INetClient {
     public event Action TimeoutEvent;
 
     /// <summary>
+    /// Event that is called on the main thread when a connected client stops receiving updates for a few seconds.
+    /// </summary>
+    public event Action StalledEvent;
+
+    /// <summary>
+    /// Event that is called on the main thread when updates arrive again after <see cref="StalledEvent"/>.
+    /// </summary>
+    public event Action ResumedEvent;
+
+    /// <summary>
     /// The connection status of the client.
     /// </summary>
     public ClientConnectionStatus ConnectionStatus { get; private set; } = ClientConnectionStatus.NotConnected;
@@ -92,6 +102,12 @@ internal class NetClient : INetClient {
         _dtlsClient = new DtlsClient();
 
         UpdateManager = new ClientUpdateManager();
+        UpdateManager.SilenceEvent += () => {
+            if (IsConnected) ThreadUtil.RunActionOnMainThread(() => StalledEvent?.Invoke());
+        };
+        UpdateManager.ResumeEvent += () => {
+            if (IsConnected) ThreadUtil.RunActionOnMainThread(() => ResumedEvent?.Invoke());
+        };
 
         _chunkSender = new ClientChunkSender(UpdateManager);
         _chunkReceiver = new ClientChunkReceiver(UpdateManager);

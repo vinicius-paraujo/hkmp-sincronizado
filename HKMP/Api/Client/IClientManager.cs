@@ -39,6 +39,28 @@ public interface IClientManager {
     void Disconnect();
 
     /// <summary>
+    /// Whether a connection timeout keeps the player in the game instead of returning to the main menu, so the
+    /// caller can reconnect with <see cref="Reconnect"/>.
+    /// </summary>
+    bool StayInGameOnTimeout { get; set; }
+
+    /// <summary>
+    /// Whether the local player hosts the server it is connected to.
+    /// </summary>
+    bool IsHostingServer { get; }
+
+    /// <summary>
+    /// Whether the local player simulates the entities of its current scene for the other players in it.
+    /// </summary>
+    bool IsSceneHost { get; }
+
+    /// <summary>
+    /// Connect again to the last server with the same username while staying in the game. The current save is
+    /// replaced by the server's when the connection is accepted.
+    /// </summary>
+    void Reconnect();
+
+    /// <summary>
     /// Get a specific player by their ID.
     /// </summary>
     /// <param name="id">The ID of the player.</param>
@@ -76,6 +98,16 @@ public interface IClientManager {
     /// Event that is called when the local user disconnects from the server.
     /// </summary>
     event Action DisconnectEvent;
+
+    /// <summary>
+    /// Event that is called when no update has arrived from the server for a few seconds while connected.
+    /// </summary>
+    event Action ConnectionStalledEvent;
+
+    /// <summary>
+    /// Event that is called when updates arrive again after <see cref="ConnectionStalledEvent"/>.
+    /// </summary>
+    event Action ConnectionResumedEvent;
 
     /// <summary>
     /// Event that is called when another player connects to the server.

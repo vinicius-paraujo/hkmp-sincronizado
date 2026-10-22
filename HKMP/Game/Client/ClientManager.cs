@@ -123,6 +123,17 @@ internal class ClientManager : IClientManager {
     private string _username;
 
     /// <summary>
+    /// The address and port of the last server connected to, for reconnecting.
+    /// </summary>
+    private string _lastAddress;
+    private int _lastPort;
+
+    /// <summary>
+    /// Whether the next accepted connection is a reconnect that must take over the server's save.
+    /// </summary>
+    private bool _resyncOnConnect;
+
+    /// <summary>
     /// Keeps track of the last updated location of the local player object.
     /// </summary>
     private Vector3 _lastPosition;
@@ -192,6 +203,21 @@ internal class ClientManager : IClientManager {
 
     /// <inheritdoc />
     public event Action DisconnectEvent;
+
+    /// <inheritdoc />
+    public event Action ConnectionStalledEvent;
+
+    /// <inheritdoc />
+    public event Action ConnectionResumedEvent;
+
+    /// <inheritdoc />
+    public bool StayInGameOnTimeout { get; set; }
+
+    /// <inheritdoc />
+    public bool IsHostingServer => _saveManager.IsHostingServer;
+
+    /// <inheritdoc />
+    public bool IsSceneHost => _entityManager.IsSceneHost;
 
     /// <inheritdoc />
     public event Action<IClientPlayer> PlayerConnectEvent;
@@ -294,6 +320,8 @@ internal class ClientManager : IClientManager {
         // Register client connect and timeout handler
         _netClient.ConnectEvent += OnClientConnect;
         _netClient.TimeoutEvent += OnTimeout;
+        _netClient.StalledEvent += () => ConnectionStalledEvent?.Invoke();
+        _netClient.ResumedEvent += () => ConnectionResumedEvent?.Invoke();
     }
 
     /// <summary>
@@ -480,6 +508,8 @@ internal class ClientManager : IClientManager {
 
         // Store username, so we know what to send the server if we are connected
         _username = username;
+        _lastAddress = address;
+        _lastPort = port;
 
         // Connect the network client
         _netClient.Connect(
@@ -622,6 +652,15 @@ internal class ClientManager : IClientManager {
         // Register hooks and packet handlers before we load into the game
         RegisterHooks();
         RegisterPacketHandlers();
+
+        // A reconnect stays in the game, so the save cannot be loaded from the menu; the server's values are applied
+        // in place instead, overwriting whatever the player had when the connection dropped.
+        if (_resyncOnConnect) {
+            _resyncOnConnect = false;
+            if (_fullSynchronisation) {
+                _saveManager.SetSaveWithData(serverInfo.CurrentSave);
+            }
+        }
 
         // Relay the addon order from the server info to the addon manager
         _addonManager.UpdateNetworkedAddonOrder(serverInfo.AddonOrder);
@@ -1278,6 +1317,12 @@ internal class ClientManager : IClientManager {
             return;
         }
 
+        if (StayInGameOnTimeout) {
+            Logger.Info("Connection to server timed out, staying in game to reconnect");
+            Disconnect();
+            return;
+        }
+
         Logger.Info("Connection to server timed out, moving to main menu");
         
         _uiManager.ReturnToMainMenuFromGame();
@@ -1285,6 +1330,20 @@ internal class ClientManager : IClientManager {
         UiManager.InternalChatBox.AddMessage("You are disconnected from the server (server timed out)");
 
         Disconnect();
+    }
+
+    /// <inheritdoc />
+    public void Reconnect() {
+        // An attempt still in progress finishes or fails on its own; starting another would race it.
+        if (_netClient.ConnectionStatus != ClientConnectionStatus.NotConnected || _lastAddress == null) {
+            return;
+        }
+
+        Logger.Info($"Reconnecting to {_lastAddress}:{_lastPort} as {_username}");
+        _resyncOnConnect = true;
+        Connect(_lastAddress, _lastPort, _username);
+        // Connecting from inside the game is what hosting does: no save selection, no scene load.
+        _autoConnect = true;
     }
 
     /// <summary>
