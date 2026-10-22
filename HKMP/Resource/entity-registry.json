@@ -19,6 +19,21 @@
         "fsm_name": "Lift Control"
     },
     {
+        "base_object_name": "Stag Lift",
+        "type": "StationLift",
+        "fsm_name": "Lift Control"
+    },
+    {
+        "base_object_name": "Mines Lift",
+        "type": "StationLift",
+        "fsm_name": "Lift Control"
+    },
+    {
+        "base_object_name": "Mines Exit Lift",
+        "type": "StationLift",
+        "fsm_name": "Lift Control"
+    },
+    {
         "base_object_name": "Mines Platform",
         "type": "CrystalPeakPlatform",
         "components": [

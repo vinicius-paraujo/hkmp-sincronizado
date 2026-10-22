@@ -240,5 +240,7 @@ internal enum EntityType {
     HeavyZoteling,
     AbsoluteRadiance,
     RadiancePlatform,
-    RadianceAbyss
+    RadianceAbyss,
+    // Two-stop lifts that move when the knight steps on them: the stagway and Crystal Peak lifts.
+    StationLift
 }
