@@ -152,7 +152,8 @@ internal class ConnectInterface {
                 break;
             case ConnectionFailedReason.Other:
                 var message = ((ConnectionFailedMessageResult) result).Message;
-                SetFeedbackText(Color.red, $"Failed to connect:\n{message}");
+                SetFeedbackText(Color.red, message == "Username already in use"
+                    ? ConnectionFeedback.NameInUse() : $"Failed to connect:\n{message}");
                 break;
             default:
                 SetFeedbackText(Color.red, $"Failed to connect:\nUnknown reason");
