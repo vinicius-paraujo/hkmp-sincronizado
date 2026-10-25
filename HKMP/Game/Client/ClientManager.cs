@@ -809,7 +809,7 @@ internal class ClientManager : IClientManager {
         Logger.Info("Received AlreadyInScene packet");
 
         foreach (var playerEnterScene in alreadyInScene.PlayerEnterSceneList) {
-            Logger.Info($"Updating already in scene player with ID: {playerEnterScene.Id}");
+            Logger.Debug($"Updating already in scene player with ID: {playerEnterScene.Id}");
             OnPlayerEnterScene(playerEnterScene);
         }
 
@@ -829,12 +829,12 @@ internal class ClientManager : IClientManager {
             }
 
             foreach (var entityUpdate in alreadyInScene.EntityUpdateList) {
-                Logger.Info($"Updating already in scene entity with ID: {entityUpdate.Id}");
+                Logger.Debug($"Updating already in scene entity with ID: {entityUpdate.Id}");
                 _entityManager.HandleEntityUpdate(entityUpdate, true);
             }
 
             foreach (var entityUpdate in alreadyInScene.ReliableEntityUpdateList) {
-                Logger.Info($"Updating already in scene reliable entity data with ID: {entityUpdate.Id}");
+                Logger.Debug($"Updating already in scene reliable entity data with ID: {entityUpdate.Id}");
                 _entityManager.HandleReliableEntityUpdate(entityUpdate, true);
             }
 

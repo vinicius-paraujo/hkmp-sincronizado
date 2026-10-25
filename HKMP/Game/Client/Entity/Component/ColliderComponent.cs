@@ -44,7 +44,7 @@ internal class ColliderComponent : EntityComponent {
 
         var newEnabled = _collider.Host.enabled;
         if (!_lastEnabled.HasValue || newEnabled != _lastEnabled.Value) {
-            Logger.Info($"Collider of {GameObject.Host.name} enabled changed to: {newEnabled}");
+            Logger.Debug($"Collider of {GameObject.Host.name} enabled changed to: {newEnabled}");
             _lastEnabled = newEnabled;
 
             var data = new EntityNetworkData {
@@ -62,10 +62,10 @@ internal class ColliderComponent : EntityComponent {
 
     /// <inheritdoc />
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
-        Logger.Info($"Received collider update for {GameObject.Client.name}");
+        Logger.Debug($"Received collider update for {GameObject.Client.name}");
         
         if (!IsControlled) {
-            Logger.Info("  Entity was not controlled");
+            Logger.Debug("  Entity was not controlled");
             return;
         }
         
@@ -78,7 +78,7 @@ internal class ColliderComponent : EntityComponent {
             _collider.Client.enabled = enabled;
         }
 
-        Logger.Info($"  Enabled: {enabled}");
+        Logger.Debug($"  Enabled: {enabled}");
     }
 
     /// <inheritdoc />

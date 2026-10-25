@@ -383,23 +383,23 @@ internal class SaveManager {
         }
         
         if (!SaveDataMapping.PlayerDataVarProperties.TryGetValue(name, out var varProps)) {
-            Logger.Info($"Not in save data values, not sending save update ({name})");
+            Logger.Debug($"Not in save data values, not sending save update ({name})");
             return;
         }
 
         if (!varProps.Sync) {
-            Logger.Info($"Value should not sync, not sending save update ({name})");
+            Logger.Debug($"Value should not sync, not sending save update ({name})");
             return;
         }
         
         // If we should do the scene host check and the player is not scene host, skip sending
         if (!varProps.IgnoreSceneHost && !_entityManager.IsSceneHost) {
-            Logger.Info($"Not scene host, but required, not sending save update ({name})");
+            Logger.Debug($"Not scene host, but required, not sending save update ({name})");
             return;
         }
 
         if (!SaveDataMapping.PlayerDataIndices.TryGetValue(name, out var index)) {
-            Logger.Info($"Cannot find save data index, not sending save update ({name})");
+            Logger.Debug($"Cannot find save data index, not sending save update ({name})");
             return;
         }
 
@@ -681,7 +681,7 @@ internal class SaveManager {
     /// </summary>
     /// <param name="saveUpdate">The save update that was received.</param>
     public void UpdateSaveWithData(SaveUpdate saveUpdate) {
-        Logger.Info($"Received save update for index: {saveUpdate.SaveDataIndex}");
+        Logger.Debug($"Received save update for index: {saveUpdate.SaveDataIndex}");
 
         var index = saveUpdate.SaveDataIndex;
         var value = saveUpdate.Value;
@@ -725,7 +725,7 @@ internal class SaveManager {
                 return;
             }
 
-            Logger.Info($"Received save update ({index}, {name})");
+            Logger.Debug($"Received save update ({index}, {name})");
 
             var decodedObject = DecodeSaveDataValue(name, encodedValue);
 
@@ -784,7 +784,7 @@ internal class SaveManager {
         if (SaveDataMapping.GeoRockIndices.TryGetValue(index, out var itemData)) {
             var value = encodedValue[0];
 
-            Logger.Info($"Received geo rock save update: {itemData.Id}, {itemData.SceneName}, {value}");
+            Logger.Debug($"Received geo rock save update: {itemData.Id}, {itemData.SceneName}, {value}");
 
             foreach (var persistentFsmData in _persistentFsmData) {
                 var existingItemData = persistentFsmData.PersistentItemKey;
@@ -807,7 +807,7 @@ internal class SaveManager {
 
             var value = encodedValue[0] == 1;
 
-            Logger.Info($"Received persistent bool save update: {itemData.Id}, {itemData.SceneName}, {value}");
+            Logger.Debug($"Received persistent bool save update: {itemData.Id}, {itemData.SceneName}, {value}");
 
             foreach (var persistentFsmData in _persistentFsmData) {
                 var existingItemData = persistentFsmData.PersistentItemKey;
@@ -838,7 +838,7 @@ internal class SaveManager {
                 value = -1;
             }
 
-            Logger.Info($"Received persistent int save update: {itemData.Id}, {itemData.SceneName}, {value}");
+            Logger.Debug($"Received persistent int save update: {itemData.Id}, {itemData.SceneName}, {value}");
 
             foreach (var persistentFsmData in _persistentFsmData) {
                 var existingItemData = persistentFsmData.PersistentItemKey;

@@ -6,7 +6,10 @@ internal static class Logger {
     /// <summary>
     /// A list of logger instances
     /// </summary>
-    private static readonly List<ILogger> Loggers = new();
+    // Replaced, never modified: an addon can add a logger while network threads are logging.
+    private static ILogger[] Loggers = [];
+
+    private static readonly object AddLock = new();
 
     /// <summary>
     /// Log a message as information to all registered loggers.
@@ -63,6 +66,11 @@ internal static class Logger {
     /// </summary>
     /// <param name="logger">The instance of ILogger.</param>
     public static void AddLogger(ILogger logger) {
-        Loggers.Add(logger);
+        lock (AddLock) {
+            var loggers = new ILogger[Loggers.Length + 1];
+            Loggers.CopyTo(loggers, 0);
+            loggers[Loggers.Length] = logger;
+            Loggers = loggers;
+        }
     }
 }
