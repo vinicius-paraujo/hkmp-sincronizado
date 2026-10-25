@@ -6,8 +6,6 @@ using Logger = Hkmp.Logging.Logger;
 
 namespace Hkmp.Game.Client.Entity.Component;
 
-// TODO: make sure that the data sent on death is saved as state on the server, so new clients entering
-// scenes can start with the entity disabled/already dead
 /// <inheritdoc />
 /// This component manages the <see cref="HealthManager"/> component of the entity.
 internal class HealthManagerComponent : EntityComponent {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -96,6 +96,21 @@ internal class Entity {
     /// The last position of the entity.
     /// </summary>
     private Vector3 _lastPosition;
+
+    /// <summary>
+    /// The last position received from the previous scene host, in the space the client object uses.
+    /// </summary>
+    private Vector3 _receivedPosition;
+
+    /// <summary>
+    /// Whether a position was received since this client last stopped being the scene host.
+    /// </summary>
+    private bool _hasReceivedPosition;
+
+    /// <summary>
+    /// Where the room placed the original object when the entity was created.
+    /// </summary>
+    private readonly Vector3 _initialPosition;
     /// <summary>
     /// The last scale of the entity.
     /// </summary>
@@ -157,12 +172,15 @@ internal class Entity {
             ? Object.Host.transform.localScale 
             : Object.Host.transform.lossyScale;
 
+        // The room's own placement of the original object, before any physics can move it on this client.
+        _initialPosition = _hasParent ? Object.Host.transform.localPosition : Object.Host.transform.position;
+
         // Store whether the host object was active and set it not active until we know if we are scene host
         _originalIsActive = Object.Host.activeSelf;
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
 
-        Logger.Info(
+        Logger.Debug(
             $"Entity '{Object.Host.name}' was original active: {_originalIsActive}, last active: {_lastIsActive}");
 
         // Add a position interpolation component to the enemy so we can smooth out position updates
@@ -271,7 +289,7 @@ internal class Entity {
     /// </summary>
     /// <param name="fsm">The Playmaker FSM to process.</param>
     private void ProcessHostFsm(PlayMakerFSM fsm) {
-        Logger.Info($"Processing host FSM: {fsm.Fsm.Name}");
+        Logger.Debug($"Processing host FSM: {fsm.Fsm.Name}");
 
         EntityInitializer.CheckPreProcessFsm(fsm);
         
@@ -300,7 +318,7 @@ internal class Entity {
                     StateIndex = i,
                     ActionIndex = j
                 };
-                Logger.Info(
+                Logger.Debug(
                     $"Created hooked action: {action.GetType()}, {_fsms.Host.IndexOf(fsm)}, {stateName}, {j}");
 
                 if (_hookedTypes.Add(action.GetType())) {
@@ -328,7 +346,7 @@ internal class Entity {
     /// </summary>
     /// <param name="fsm">The Playmaker FSM to process.</param>
     private void ProcessClientFsm(PlayMakerFSM fsm) {
-        Logger.Info($"Processing client FSM: {fsm.Fsm.Name}");
+        Logger.Debug($"Processing client FSM: {fsm.Fsm.Name}");
         EntityInitializer.InitializeFsm(fsm);
         fsm.enabled = false;
     }
@@ -389,7 +407,7 @@ internal class Entity {
         var hostCollider = Object.Host.GetComponent<Collider2D>();
         var clientCollider = Object.Client.GetComponent<Collider2D>();
         if (hostCollider != null && clientCollider != null) {
-            Logger.Info($"Adding collider component to entity: {Object.Host.name}");
+            Logger.Debug($"Adding collider component to entity: {Object.Host.name}");
 
             var collider = new HostClientPair<Collider2D> {
                 Host = hostCollider,
@@ -409,7 +427,7 @@ internal class Entity {
         var hostDamageHero = Object.Host.GetComponent<DamageHero>();
         var clientDamageHero = Object.Client.GetComponent<DamageHero>();
         if (hostDamageHero != null && clientDamageHero != null) {
-            Logger.Info($"Adding DamageHero component to entity: {Object.Host.name}");
+            Logger.Debug($"Adding DamageHero component to entity: {Object.Host.name}");
 
             var damageHero = new HostClientPair<DamageHero> {
                 Host = hostDamageHero,
@@ -429,7 +447,7 @@ internal class Entity {
         var hostMeshRenderer = Object.Host.GetComponent<MeshRenderer>();
         var clientMeshRenderer = Object.Client.GetComponent<MeshRenderer>();
         if (hostMeshRenderer != null && clientMeshRenderer != null) {
-            Logger.Info($"Adding MeshRenderer component to entity: {Object.Host.name}");
+            Logger.Debug($"Adding MeshRenderer component to entity: {Object.Host.name}");
 
             var meshRenderer = new HostClientPair<MeshRenderer> {
                 Host = hostMeshRenderer,
@@ -565,7 +583,7 @@ internal class Entity {
             return;
         }
 
-        Logger.Info(
+        Logger.Debug(
             $"Entity ({Id}, {Type}) hooked action: {self.Fsm.Name}, {self.State.Name}, {self.GetType()} ({hookedEntityAction.FsmIndex}, {hookedEntityAction.StateIndex}, {hookedEntityAction.ActionIndex})");
 
         var networkData = new EntityNetworkData {
@@ -839,7 +857,7 @@ internal class Entity {
             return;
         }
 
-        Logger.Info($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
+        Logger.Debug($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
         _netClient.UpdateManager.UpdateEntityAnimation(
             Id,
             animationId,
@@ -889,6 +907,16 @@ internal class Entity {
     /// Initializes the entity when the client user is the scene host.
     /// </summary>
     public void InitializeHost() {
+        // A room can destroy an original before the scene host is known, such as an encounter that removes
+        // itself once seen. There is nothing to activate, and the other entities must still be initialized.
+        if (Object.Host == null) {
+            _isControlled = false;
+            _isSceneHostDetermined = true;
+            ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
+            Logger.Info($"Entity ({Id}, {Type}) has no original object left; nothing to initialize as host");
+            return;
+        }
+
         Object.Host.SetActive(_originalIsActive);
 
         // Also update the last active variable to account for this potential change
@@ -963,12 +991,13 @@ internal class Entity {
         if (_hasParent) {
             Logger.Debug("  Entity has parent, only setting local transform");
 
-            Object.Host.transform.localPosition = _lastPosition = Object.Client.transform.localPosition;
+            Object.Host.transform.localPosition = _lastPosition =
+                HandoverPosition.Choose(_hasReceivedPosition, _receivedPosition, _initialPosition);
             Object.Host.transform.localScale = _lastScale = Object.Client.transform.localScale;
         } else {
             Logger.Debug("  Entity has no parent, calculating transform");
 
-            var clientPos = Object.Client.transform.localPosition;
+            var clientPos = HandoverPosition.Choose(_hasReceivedPosition, _receivedPosition, _initialPosition);
             var parentPos = Vector3.zero;
             if (Object.Host.transform.parent != null) {
                 parentPos = Object.Host.transform.parent.position;
@@ -1017,11 +1046,19 @@ internal class Entity {
         var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
         if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator
             && Type != EntityType.StationLift) {
-            Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
-            rigidBody.isKinematic = false;
+            // A body whose collider is off while it waits, such as the Broken Vessel during its first encounter,
+            // has nothing to stand on: dynamic physics would drop it through the floor of the room.
+            var hostCollider = Object.Host.GetComponent<Collider2D>();
+            if (hostCollider == null || hostCollider.enabled) {
+                Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
+                rigidBody.isKinematic = false;
+            }
         }
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
+
+        // From now on this client sends positions; a later handover must wait for the next host's own.
+        _hasReceivedPosition = false;
         
         _isControlled = false;
 
@@ -1094,6 +1131,10 @@ internal class Entity {
             state.Actions = oldActions;
         }
 
+        // Restoring an FSM state does not replay one-shot activation actions from earlier states.
+        // Preserve hitboxes such as Gruz Mother's Hero Damager before the new host simulates a frame.
+        EntityChildState.Restore(Object.Host, Object.Client);
+
         if (_components.TryGetValue(EntityComponentType.Health, out var health)) {
             ((HealthManagerComponent)health).RestoreHealth();
         }
@@ -1114,6 +1155,9 @@ internal class Entity {
             position.Y,
             _hasParent ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
         );
+
+        _receivedPosition = unityPos;
+        _hasReceivedPosition = true;
 
         var positionInterpolation = Object.Client.GetComponent<PositionInterpolation>();
         if (positionInterpolation == null) {
@@ -1202,7 +1246,7 @@ internal class Entity {
             return;
         }
 
-        Logger.Info($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
+        Logger.Debug($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
 
         // All paths lead to calling the Play method of the sprite animator that is hooked, so we allow the call
         // through the hook
@@ -1264,7 +1308,7 @@ internal class Entity {
     /// <param name="active">The new value for active.</param>
     public void UpdateIsActive(bool active) {
         if (Object.Client != null) {
-            Logger.Info($"Entity '{Object.Client.name}' received active: {active}");
+            Logger.Debug($"Entity '{Object.Client.name}' received active: {active}");
             Object.Client.SetActive(active);
         } else {
             Logger.Warn($"Entity ({Id}, {Type}) could not update active, because client object is null");

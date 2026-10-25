@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Hkmp.Game.Client.Entity.Action;
@@ -99,7 +99,12 @@ internal class EntityManager {
         IsSceneHost = true;
 
         foreach (var entity in _entities.Values) {
-            entity.InitializeHost();
+            // One failing entity must not leave every later one uninitialized, and inactive, for the whole room.
+            try {
+                entity.InitializeHost();
+            } catch (Exception e) {
+                Logger.Error($"Could not initialize entity ({entity.Id}, {entity.Type}): {e}");
+            }
         }
         
         IsSceneHostDetermined = true;
@@ -116,7 +121,12 @@ internal class EntityManager {
         IsSceneHost = false;
 
         foreach (var entity in _entities.Values) {
-            entity.InitializeClient();
+            // One failing entity must not leave every later one uninitialized, and inactive, for the whole room.
+            try {
+                entity.InitializeClient();
+            } catch (Exception e) {
+                Logger.Error($"Could not initialize entity ({entity.Id}, {entity.Type}): {e}");
+            }
         }
         
         IsSceneHostDetermined = true;
