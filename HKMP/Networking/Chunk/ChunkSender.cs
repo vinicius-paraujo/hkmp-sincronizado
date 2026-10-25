@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
@@ -39,6 +39,11 @@ internal abstract class ChunkSender {
     /// Manual reset event that is used for its wait handle to time when to send the next slice.
     /// </summary>
     private readonly ManualResetEventSlim _sliceWaitHandle;
+
+    /// <summary>
+    /// The thread that currently sends chunks, so a restart can wait for it.
+    /// </summary>
+    private Thread _sendThread;
 
     /// <summary>
     /// Whether we are currently sending a chunk. If we are not sending anything, we ignore incoming chunk
@@ -104,8 +109,17 @@ internal abstract class ChunkSender {
         _sendTaskTokenSource?.Cancel();
         _sendTaskTokenSource?.Dispose();
         _sendTaskTokenSource = new CancellationTokenSource();
-        
-        new Thread(() => StartSends(_sendTaskTokenSource.Token)).Start();
+
+        // The previous thread resets the shared chunk fields when it exits. If it is still running, that reset
+        // lands in the middle of the new thread's first chunk and gives a negative slice length, which kills the
+        // new thread and leaves a reconnecting client without outgoing chunks.
+        if (_sendThread != null && _sendThread.IsAlive && !_sendThread.Join(2000)) {
+            Logger.Warn("Previous chunk sender thread did not stop in time");
+        }
+
+        var token = _sendTaskTokenSource.Token;
+        _sendThread = new Thread(() => StartSends(token));
+        _sendThread.Start();
     }
 
     /// <summary>
@@ -211,6 +225,11 @@ internal abstract class ChunkSender {
             //Logger.Debug("Successfully taken new packet from blocking collection, starting networking chunk");
 
             Array.Clear(_sliceStopwatches, 0, _sliceStopwatches.Length);
+            // Each chunk starts from slice 0 with nothing acknowledged. Leftovers from a larger previous chunk
+            // gave a start index past the new chunk's end (a negative slice length), and stale acknowledgements
+            // made the new chunk skip slices that were never received.
+            Array.Clear(_acked, 0, _acked.Length);
+            _currentSliceId = 0;
             _numAckedSlices = 0;
 
             var packetBytes = packet.ToArray();
