@@ -532,7 +532,7 @@ internal abstract class ServerManager : IServerManager {
                     entitySpawnList.Add(entitySpawn);
                 }
 
-                Logger.Info($"Sending that entity '{entityKey.EntityId}' is already in scene to '{playerData.Id}'");
+                Logger.Debug($"Sending that entity '{entityKey.EntityId}' is already in scene to '{playerData.Id}'");
 
                 var entityUpdate = new EntityUpdate {
                     Id = entityKey.EntityId
@@ -573,7 +573,9 @@ internal abstract class ServerManager : IServerManager {
                     reliableEntityUpdate.UpdateTypes.Add(EntityUpdateType.HostFsm);
 
                     foreach (var pair in entityData.HostFsmData) {
-                        reliableEntityUpdate.HostFsmData[pair.Key] = pair.Value;
+                        // The packet is written later on the send thread while the scene host keeps merging new
+                        // values into the stored data; a copy taken now cannot change under the writer.
+                        reliableEntityUpdate.HostFsmData[pair.Key] = pair.Value.Snapshot();
                     }
                 }
 
@@ -901,6 +903,10 @@ internal abstract class ServerManager : IServerManager {
                 }
             );
 
+            // Pooled bodies can start another life without receiving a new entity ID.
+            if (entityUpdate.IsActive && entityData.IsActive == false) {
+                entityData.GenericData.RemoveAll(data => data.Type == EntityComponentType.Death);
+            }
             entityData.IsActive = entityUpdate.IsActive;
         }
 
@@ -931,7 +937,9 @@ internal abstract class ServerManager : IServerManager {
             }
 
             foreach (var updateData in entityUpdate.GenericData) {
-                if (updateData.Type > EntityComponentType.Death) {
+                // Death is terminal state too: a later room arrival must not receive a living replica.
+                // FSM actions remain transient, since replaying them can restart attacks or cutscenes.
+                if (updateData.Type >= EntityComponentType.Death) {
                     ReplaceExistingDataWithSameType(updateData.Type, updateData.Packet);
                 }
             }
@@ -947,7 +955,9 @@ internal abstract class ServerManager : IServerManager {
                     entityData.HostFsmData[fsmIndex] = existingData;
                 }
 
-                existingData.MergeData(data);
+                lock (existingData) {
+                    existingData.MergeData(data);
+                }
                 
                 SendDataInSameScene(
                     id,
@@ -1329,23 +1339,12 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
-        // Check whether the username is not already in use. The same player coming back, proven by the auth key,
-        // replaces the session it left behind: after a tunnel reconnects, the old one lingers until it times out.
-        foreach (var existing in _playerData) {
-            if (!existing.Value.Username.ToLower().Equals(clientInfo.Username.ToLower())) {
-                continue;
-            }
-
-            if (existing.Value.AuthKey != clientInfo.AuthKey) {
-                Logger.Debug("  Client username is already in use, rejected connection");
-
-                serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-                serverInfo.ConnectionRejectedMessage = "Username already in use";
-                return;
-            }
-
-            Logger.Info($"  Player {existing.Key} is reconnecting, replacing the previous session");
-            ProcessPlayerDisconnect(existing.Key);
+        // A second process may share the same settings and auth key. Never evict a live session on login.
+        if (_playerData.Values.Any(player => string.Equals(player.Username, clientInfo.Username, StringComparison.OrdinalIgnoreCase))) {
+            Logger.Info("Connection rejected: username already in use; existing session preserved");
+            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
+            serverInfo.ConnectionRejectedMessage = "Username already in use";
+            return;
         }
 
         var addonData = clientInfo.AddonData;
@@ -1647,7 +1646,7 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
-        Logger.Info($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
+        Logger.Debug($"Save update from ({id}, {playerData.Username}), index: {packet.SaveDataIndex}");
 
         // Find the properties for syncing this save update, based on whether it is a geo rock, player data or 
         // persistent bool/int item
