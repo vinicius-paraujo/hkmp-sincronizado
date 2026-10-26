@@ -283,7 +283,14 @@ internal class NetClient : INetClient {
         ConnectionStatus = ClientConnectionStatus.NotConnected;
         
         // Invoke callback if it exists on the main thread of Unity
-        ThreadUtil.RunActionOnMainThread(() => { ConnectFailedEvent?.Invoke(result); });
+        ThreadUtil.RunActionOnMainThread(() => {
+            // StopUpdates flushed the final acknowledgement. Release the rejected attempt before allowing a retry.
+            _chunkSender.Stop();
+            _chunkReceiver.Reset();
+            _dtlsClient.Disconnect();
+            UpdateManager.TimeoutEvent -= OnConnectTimedOut;
+            ConnectFailedEvent?.Invoke(result);
+        });
     }
 
     /// <summary>

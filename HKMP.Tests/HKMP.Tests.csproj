@@ -11,4 +11,5 @@
 <Compile Include="../HKMP/Networking/Packet/IPacket.cs" Link="Production/IPacket.cs" />
 <Compile Include="../HKMP/Math/Vector2.cs" Link="Production/Vector2.cs" />
 <Compile Include="../HKMP/Math/Vector3.cs" Link="Production/Vector3.cs" />
+<Compile Include="../HKMP/Networking/Chunk/ChunkSender.cs" Link="Production/ChunkSender.cs" />
 </ItemGroup></Project>

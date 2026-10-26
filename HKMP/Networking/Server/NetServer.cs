@@ -341,7 +341,9 @@ internal class NetServer : INetServer {
 
                 OnClientDisconnect(clientId);
 
-                _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
+                if (serverInfo.ConnectionRejectedMessage != "Username already in use") {
+                    _throttledClients[client.EndPoint.Address] = Stopwatch.StartNew();
+                }
             });
         }
     }

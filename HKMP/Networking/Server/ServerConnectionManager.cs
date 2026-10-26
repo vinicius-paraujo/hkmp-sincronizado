@@ -78,12 +78,15 @@ internal class ServerConnectionManager : ConnectionManager {
         _timeoutTimer.Stop();
     }
 
+    private Action _connectionCompleted;
+
     /// <summary>
     /// Finish up the connection and execute the given callback when it is finished.
     /// </summary>
     /// <param name="callback">The action to execute when the connection is finished.</param>
     public void FinishConnection(Action callback) {
-        _chunkSender.FinishSendingData(callback);
+        // Validation runs before the response exists; defer completion until that response is acknowledged.
+        _connectionCompleted = callback;
     }
 
     /// <summary>
@@ -108,7 +111,8 @@ internal class ServerConnectionManager : ConnectionManager {
         var packet = new Packet.Packet();
         connectionPacket.CreatePacket(packet);
 
-        _chunkSender.EnqueuePacket(packet);
+        _chunkSender.EnqueuePacket(packet, _connectionCompleted);
+        _connectionCompleted = null;
     }
 
     /// <summary>

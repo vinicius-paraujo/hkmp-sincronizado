@@ -24,7 +24,7 @@ internal abstract class ChunkSender {
     /// <summary>
     /// Blocking collection of packets that need to be sent as chunks.
     /// </summary>
-    private readonly BlockingCollection<Packet.Packet> _toSendPackets;
+    private readonly BlockingCollection<(Packet.Packet Packet, Action Completed)> _toSendPackets;
 
     /// <summary>
     /// Boolean array where each value indicates whether the slice of the same index was acknowledged.
@@ -83,17 +83,11 @@ internal abstract class ChunkSender {
     private CancellationTokenSource _sendTaskTokenSource;
 
     /// <summary>
-    /// Event that is called when we finish sending data. This is registered internally when the
-    /// <see cref="FinishSendingData"/> method is called and we are waiting for the current chunk to finish sending.
-    /// </summary>
-    private event Action FinishSendingDataEvent;
-
-    /// <summary>
     /// Construct the chunk sender by initializing the blocking collection and manual reset event, and allocating the
     /// arrays to their maximally used length.
     /// </summary>
     protected ChunkSender() {
-        _toSendPackets = new BlockingCollection<Packet.Packet>();
+        _toSendPackets = new BlockingCollection<(Packet.Packet Packet, Action Completed)>();
         
         _acked = new bool[ConnectionManager.MaxSlicesPerChunk];
         _chunkData = new byte[ConnectionManager.MaxChunkSize];
@@ -132,34 +126,12 @@ internal abstract class ChunkSender {
     }
 
     /// <summary>
-    /// Finish sending data and call the given callback whenever the data is finished sending.
-    /// </summary>
-    /// <param name="callback">The callback to invoke.</param>
-    public void FinishSendingData(Action callback) {
-        // If we aren't currently sending and the queue does not contain any packets to send, we immediately invoke
-        // the callback and return
-        if (!_isSending && _toSendPackets.Count == 0) {
-            callback?.Invoke();
-            return;
-        }
-
-        // Otherwise, we register the event
-        // We do it like this so we can deregister the event immediately after it is called, so it doesn't trigger
-        // more than once
-        Action lambda = null;
-        lambda = () => {
-            callback?.Invoke();
-            FinishSendingDataEvent -= lambda;
-        };
-        FinishSendingDataEvent += lambda;
-    }
-
-    /// <summary>
     /// Enqueue a packet to be sent as a chunk.
     /// </summary>
     /// <param name="packet">The packet to send.</param>
-    public void EnqueuePacket(Packet.Packet packet) {
-        _toSendPackets.Add(packet);
+    /// <param name="completed">Called after every slice of this packet is acknowledged.</param>
+    public void EnqueuePacket(Packet.Packet packet, Action completed = null) {
+        _toSendPackets.Add((packet, completed));
     }
 
     /// <summary>
@@ -209,13 +181,9 @@ internal abstract class ChunkSender {
     /// <param name="cancellationToken">The cancellation token for cancelling the sending process.</param>
     private void StartSends(CancellationToken cancellationToken) {
         while (!cancellationToken.IsCancellationRequested) {
-            if (_toSendPackets.Count == 0) {
-                FinishSendingDataEvent?.Invoke();
-            }
-
-            Packet.Packet packet;
+            (Packet.Packet Packet, Action Completed) pending;
             try {
-                packet = _toSendPackets.Take(cancellationToken);
+                pending = _toSendPackets.Take(cancellationToken);
             } catch (OperationCanceledException) {
                 continue;
             }
@@ -232,7 +200,7 @@ internal abstract class ChunkSender {
             _currentSliceId = 0;
             _numAckedSlices = 0;
 
-            var packetBytes = packet.ToArray();
+            var packetBytes = pending.Packet.ToArray();
 
             _chunkSize = packetBytes.Length;
             _numSlices = _chunkSize / ConnectionManager.MaxSliceSize;
@@ -295,6 +263,10 @@ internal abstract class ChunkSender {
             //Logger.Debug($"Incrementing chunk ID to: {_chunkId + 1}");
             _chunkId += 1;
             _isSending = false;
+            // Completion belongs to this response, never to an empty queue before it was enqueued.
+            if (!cancellationToken.IsCancellationRequested) {
+                pending.Completed?.Invoke();
+            }
         }
 
         //Logger.Debug("Resetting values of chunk sender");
