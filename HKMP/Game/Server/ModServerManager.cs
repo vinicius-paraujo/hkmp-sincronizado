@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Collections.Generic;
 using Hkmp.Game.Client.Save;
 using Hkmp.Game.Command.Server;
 using Hkmp.Game.Server.Save;
@@ -34,6 +36,12 @@ internal class ModServerManager : ServerManager {
     /// requested to be started after selecting a save file.
     /// </summary>
     private ServerSaveData _loadedLocalSaveData;
+
+    /// <summary>
+    /// Whether the save chosen in the menu is a new game. The new game's data is only set up after the server
+    /// starts, so until then the game still holds whatever save was loaded before.
+    /// </summary>
+    private bool _newGameChosen;
     
     public ModServerManager(
         NetServer netServer,
@@ -58,6 +66,19 @@ internal class ModServerManager : ServerManager {
         _uiManager.RequestServerStartHostEvent += port => OnRequestServerStartHost(port, _modSettings.FullSynchronisation);
         _uiManager.RequestServerStopHostEvent += Stop;
 
+        // A save without modded data does not call OnLoadLocal, so the data of a save loaded earlier in the same
+        // session would otherwise be hosted with it.
+        On.GameManager.StartNewGame += (orig, self, permadeathMode, bossRushMode) => {
+            _loadedLocalSaveData = null;
+            _newGameChosen = true;
+            orig(self, permadeathMode, bossRushMode);
+        };
+        On.GameManager.LoadGame += (orig, self, saveSlot, callback) => {
+            _loadedLocalSaveData = null;
+            _newGameChosen = false;
+            orig(self, saveSlot, callback);
+        };
+
         // Register application quit handler
         ModHooks.ApplicationQuitHook += Stop;
     }
@@ -68,7 +89,21 @@ internal class ModServerManager : ServerManager {
     /// <param name="port">The port to start the server on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation is enabled.</param>
     private void OnRequestServerStartHost(int port, bool fullSynchronisation) {
+        // The server outlives each hosted session; a new one must not hand the previous session's data to anyone.
+        ServerSaveData.GlobalSaveData = new Dictionary<ushort, byte[]>();
+        ServerSaveData.PlayerSaveData = new Dictionary<string, Dictionary<ushort, byte[]>>();
+
         if (fullSynchronisation) {
+            if (_newGameChosen) {
+                // Set up the new game's data now, as starting it would a moment later, so the server is seeded
+                // with a new game instead of the save that was loaded before.
+                // Not public in the patched assembly; the game calls it itself when the new game starts.
+                typeof(PlayerData)
+                    .GetMethod("SetupNewPlayerData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?
+                    .Invoke(PlayerData.instance, null);
+                SceneData.instance.Reset();
+            }
+
             // Get the global save data from the save manager, which obtains the global save data from the loaded
             // save file that the user selected
             ServerSaveData.GlobalSaveData = SaveManager.GetCurrentSaveData(true);
