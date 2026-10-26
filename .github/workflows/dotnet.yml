@@ -1,40 +1,60 @@
 name: .NET CI
 
-# Run on both push and pull request target
+# Runs on pushes to this repository only. The build needs a secret, and a pull request target would hand it to
+# code from a pull request.
 on:
-  pull_request_target:
-    types: [ labeled ]
   push:
+  workflow_dispatch:
+
+env:
+  GAME_VERSION: 1.5.78.11833
 
 jobs:
+  # The tests compile the fork's own logic against small doubles of the game types, so they need no game files.
+  # They target .NET Framework, which runs natively on Windows.
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - name: Test
+        run: dotnet test HKMP.Tests -c Release
+
   build:
     runs-on: ubuntu-latest
-    # Run job only on push event or when the PR has the 'safe to build' label
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'safe to build')
 
     steps:
-      # If it is a push event, we checkout the commit
       - name: Checkout commit
-        if: github.event_name == 'push'
         uses: actions/checkout@v5
-        
-      # If it is a PR, we checkout the head of the PR branch
-      - name: Checkout PR branch
-        if: github.event_name == 'pull_request_target'
+
+      # Without the variable, checkout falls back to this repository and the failure only shows up when unpacking.
+      - name: Require game references settings
+        env:
+          REPOSITORY: ${{ vars.GAME_REFERENCES_REPOSITORY }}
+          HAS_KEY: ${{ secrets.GAME_REFERENCES_DEPLOY_KEY != '' }}
+        run: |
+          [ -n "$REPOSITORY" ] || { echo "Set the GAME_REFERENCES_REPOSITORY variable."; exit 1; }
+          [ "$HAS_KEY" = "true" ] || { echo "Set the GAME_REFERENCES_DEPLOY_KEY secret."; exit 1; }
+
+      # The game's own assemblies cannot be public; a private repository holds them for the build only.
+      - name: Check out game references
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ vars.GAME_REFERENCES_REPOSITORY }}
+          ssh-key: ${{ secrets.GAME_REFERENCES_DEPLOY_KEY }}
+          sparse-checkout: ${{ env.GAME_VERSION }}/managed.tar.gz
+          sparse-checkout-cone-mode: false
+          path: game-references
+          persist-credentials: false
 
-      - name: Download dependencies
-        run: wget https://files.catbox.moe/t156ho.gpg -O deps.zip.gpg
-
-      - name: Decrypt dependencies
-        run: gpg --quiet --batch --yes --decrypt --passphrase="${{ secrets.DEPENDENCIES_ZIP_PASSPHRASE }}" --output deps.zip deps.zip.gpg
-
-      - name: Unzip dependencies
+      # HKMP/lib is where the example build properties point when no local file exists.
+      - name: Unpack game references
         run: |
           mkdir ${{ github.workspace }}/HKMP/lib
-          unzip deps.zip -d ${{ github.workspace }}/HKMP/lib
+          tar -xzf game-references/${{ env.GAME_VERSION }}/managed.tar.gz -C ${{ github.workspace }}/HKMP/lib
+          rm -rf game-references
       
       - name: Copy HKMPServer dependencies
         run: |
