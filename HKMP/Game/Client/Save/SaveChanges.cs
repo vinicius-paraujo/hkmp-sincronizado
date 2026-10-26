@@ -21,10 +21,10 @@ internal class SaveChanges {
     public void ApplyPlayerDataSaveChange(string name) {
         Logger.Debug($"ApplyPlayerData for name: {name}");
 
-        // If we receive the dash from a save update, we need to also set the 'canDash' boolean to ensure that
-        // the input for dashing is accepted
+        // The game accepts dash input through 'canDash', which only the pickup sets. It follows the received value:
+        // the whole server save also passes through here on joining, and a missing cloak must not grant the dash.
         if (name == "hasDash") {
-            PlayerData.instance.SetBool("canDash", true);
+            PlayerData.instance.SetBool("canDash", PlayerData.instance.GetBool("hasDash"));
             return;
         }
         
