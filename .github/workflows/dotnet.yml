@@ -10,20 +10,12 @@ env:
   GAME_VERSION: 1.5.78.11833
 
 jobs:
-  # The tests compile the fork's own logic against small doubles of the game types, so they need no game files.
-  # They target .NET Framework, which runs natively on Windows.
-  test:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 8.0.x
-      - name: Test
-        run: dotnet test HKMP.Tests -c Release
-
+  # Windows runs the .NET Framework tests natively; one of them loads the HKMP that this job builds.
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout commit
@@ -52,14 +44,14 @@ jobs:
       # HKMP/lib is where the example build properties point when no local file exists.
       - name: Unpack game references
         run: |
-          mkdir ${{ github.workspace }}/HKMP/lib
-          tar -xzf game-references/${{ env.GAME_VERSION }}/managed.tar.gz -C ${{ github.workspace }}/HKMP/lib
+          mkdir HKMP/lib
+          tar -xzf game-references/${{ env.GAME_VERSION }}/managed.tar.gz -C HKMP/lib
           rm -rf game-references
       
       - name: Copy HKMPServer dependencies
         run: |
-          mkdir ${{ github.workspace }}/HKMPServer/Lib
-          cp ${{ github.workspace }}/HKMP/lib/Newtonsoft.Json.dll ${{ github.workspace }}/HKMPServer/Lib
+          mkdir HKMPServer/Lib
+          cp HKMP/lib/Newtonsoft.Json.dll HKMPServer/Lib
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -67,29 +59,32 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore ${{ github.workspace }}
+        run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore -c release --verbosity n ${{ github.workspace }}
+        run: dotnet build --no-restore -c release --verbosity n
+
+      - name: Test
+        run: dotnet test HKMP.Tests -c Release
 
       - name: Upload HKMP artifact
         uses: actions/upload-artifact@v4
         with:
           name: HKMP
           path: |
-            ${{ github.workspace }}/HKMP/bin/Release/net472/HKMP.dll
-            ${{ github.workspace }}/HKMP/bin/Release/net472/HKMP.xml
-            ${{ github.workspace }}/HKMP/bin/Release/net472/HKMP.pdb
-            ${{ github.workspace }}/HKMP/bin/Release/net472/BouncyCastle.Cryptography.dll
+            HKMP/bin/Release/net472/HKMP.dll
+            HKMP/bin/Release/net472/HKMP.xml
+            HKMP/bin/Release/net472/HKMP.pdb
+            HKMP/bin/Release/net472/BouncyCastle.Cryptography.dll
       
       - name: Upload HKMPServer artifact
         uses: actions/upload-artifact@v4
         with:
           name: HKMPServer
           path: |
-            ${{ github.workspace }}/HKMPServer/bin/Release/net472/HKMPServer.exe
-            ${{ github.workspace }}/HKMPServer/bin/Release/net472/HKMPServer.pdb
-            ${{ github.workspace }}/HKMPServer/bin/Release/net472/HKMP.dll
-            ${{ github.workspace }}/HKMPServer/bin/Release/net472/HKMP.pdb
-            ${{ github.workspace }}/HKMPServer/bin/Release/net472/Newtonsoft.Json.dll
-            ${{ github.workspace }}/HKMPServer/bin/Release/net472/BouncyCastle.Cryptography.dll
+            HKMPServer/bin/Release/net472/HKMPServer.exe
+            HKMPServer/bin/Release/net472/HKMPServer.pdb
+            HKMPServer/bin/Release/net472/HKMP.dll
+            HKMPServer/bin/Release/net472/HKMP.pdb
+            HKMPServer/bin/Release/net472/Newtonsoft.Json.dll
+            HKMPServer/bin/Release/net472/BouncyCastle.Cryptography.dll
