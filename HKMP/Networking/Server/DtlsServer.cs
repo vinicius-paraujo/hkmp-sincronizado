@@ -185,6 +185,9 @@ internal class DtlsServer {
                 }, cancellationToken);
             } catch (OperationCanceledException) {
                 break;
+            } catch (ObjectDisposedException) {
+                // The transport of a client that is disconnecting; datagrams of other clients must still flow
+                continue;
             }
         }
     }

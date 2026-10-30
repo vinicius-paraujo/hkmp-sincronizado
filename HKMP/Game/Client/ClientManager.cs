@@ -1016,6 +1016,11 @@ internal class ClientManager : IClientManager {
             Logger.Info($"  Current scene ({currentScene}) does not match scene for host transfer, ignoring");
             return;
         }
+
+        if (!hostTransfer.IsHost) {
+            if (_entityManager.IsSceneHost) _entityManager.LoseSceneHost();
+            return;
+        }
         
         _entityManager.BecomeSceneHost();
     }

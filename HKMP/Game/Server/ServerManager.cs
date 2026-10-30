@@ -1114,7 +1114,7 @@ internal abstract class ServerManager : IServerManager {
 
         // The leave-scene handling below runs after the player is removed from the mapping and so never reaches
         // its scene host transfer; without this, a room whose host disconnects freezes for everyone left in it.
-        TransferSceneHost(id);
+        TransferSceneHost(id, false);
         _silentPlayers.TryRemove(id, out _);
 
         foreach (var idPlayerDataPair in _playerData) {
@@ -1463,7 +1463,8 @@ internal abstract class ServerManager : IServerManager {
     /// still sending updates. Nothing changes when no one else is in the scene.
     /// </summary>
     /// <param name="id">The ID of the current scene host.</param>
-    private void TransferSceneHost(ushort id) {
+    /// <param name="notifyPrevious">Whether the previous host is still connected and must be told it lost the role.</param>
+    private void TransferSceneHost(ushort id, bool notifyPrevious = true) {
         if (!FullSynchronisation || !_playerData.TryGetValue(id, out var playerData) || !playerData.IsSceneHost) {
             return;
         }
@@ -1481,6 +1482,8 @@ internal abstract class ServerManager : IServerManager {
         playerData.IsSceneHost = false;
         newHost.IsSceneHost = true;
         _netServer.GetUpdateManagerForClient(newHostId)?.SetSceneHostTransfer(sceneName);
+        // A stalled host still receives; without this it would keep acting as host once it resumes.
+        if (notifyPrevious) _netServer.GetUpdateManagerForClient(id)?.SetSceneHostTransfer(sceneName, false);
         Logger.Info($"Scene host of {sceneName} moved from {id} to {newHostId}");
     }
 
@@ -1693,8 +1696,18 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
-        // Check whether this save update requires the player to be scene host and do the check for it
-        if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost) {
+        // Check whether this save update requires the player to be scene host and do the check for it. Persistent
+        // bools set to true come from the player's own action and are accepted from anyone, as the client sends them.
+        var isPersistentBoolSet = SaveDataMapping.Instance.PersistentBoolIndices.TryGetValue(packet.SaveDataIndex, out _)
+                                  && packet.Value is { Length: > 0 } && packet.Value[0] != 0;
+        var isGeoRock = SaveDataMapping.Instance.GeoRockIndices.TryGetValue(packet.SaveDataIndex, out _);
+        if (isGeoRock && ServerSaveData.GlobalSaveData.TryGetValue(packet.SaveDataIndex, out var storedHits)
+                      && packet.Value is { Length: > 0 } && storedHits.Length > 0 && packet.Value[0] >= storedHits[0]) {
+            Logger.Debug("  Geo rock already has as few hits left, not broadcasting");
+            return;
+        }
+
+        if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost && !isPersistentBoolSet && !isGeoRock) {
             Logger.Debug("  Player is not scene host, but should be for update, not broadcasting");
             return;
         }

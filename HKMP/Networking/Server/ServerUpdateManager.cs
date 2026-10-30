@@ -478,10 +478,12 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// Set that the receiving player should become scene host of their current scene.
     /// </summary>
     /// <param name="sceneName">The name of the scene in which the player becomes scene host.</param>
-    public void SetSceneHostTransfer(string sceneName) {
+    /// <param name="isHost">False when the player loses the role instead.</param>
+    public void SetSceneHostTransfer(string sceneName, bool isHost = true) {
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, new HostTransfer {
-                SceneName = sceneName
+                SceneName = sceneName,
+                IsHost = isHost
             });
         }
     }

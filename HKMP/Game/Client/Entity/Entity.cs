@@ -952,6 +952,35 @@ internal class Entity {
     }
 
     /// <summary>
+    /// Makes the entity a client entity again if the server moved the scene host role away from this player while
+    /// it was stalled. The client copy takes over where the host object was and follows the new host from then on.
+    /// </summary>
+    public void MakeClient() {
+        Logger.Info($"Making entity ({Id}, {Type}) a client entity");
+
+        ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
+
+        if (Object.Host != null && Object.Client != null) {
+            var hostActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
+            // If the role returns before the new host moves this entity, the handover must not use an older position
+            _receivedPosition = _hasParent ? Object.Host.transform.localPosition : Object.Host.transform.position;
+            _hasReceivedPosition = true;
+            Object.Client.transform.position = Object.Host.transform.position;
+            Object.Client.transform.localScale = Object.Host.transform.lossyScale;
+            Object.Host.SetActive(false);
+            Object.Client.SetActive(hostActive);
+        } else if (Object.Host != null) {
+            Object.Host.SetActive(false);
+        }
+
+        _isControlled = true;
+
+        foreach (var component in _components.Values) {
+            component.IsControlled = true;
+        }
+    }
+
+    /// <summary>
     /// Makes the entity a host entity if the client user became the scene host.
     /// </summary>
     public void MakeHost() {
@@ -1045,7 +1074,9 @@ internal class Entity {
         // For the Mantis Lord and the city and station lifts, this should never be disabled, since they are always kinematic.
         var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
         if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator
-            && Type != EntityType.StationLift) {
+            && Type != EntityType.StationLift
+            // A climber rounds corners only as a kinematic body; with physics on it wedges against the first one.
+            && Object.Host.GetComponent<Climber>() == null) {
             // A body whose collider is off while it waits, such as the Broken Vessel during its first encounter,
             // has nothing to stand on: dynamic physics would drop it through the floor of the room.
             var hostCollider = Object.Host.GetComponent<Collider2D>();

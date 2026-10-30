@@ -49,6 +49,11 @@ internal abstract class UdpDatagramTransport : DatagramTransport {
             tryTakeSuccess = ReceivedDataCollection.TryTake(out data, waitMillis, _cancellationTokenSource.Token);
         } catch (OperationCanceledException) {
             return -1;
+        } catch (ObjectDisposedException) {
+            return -1;
+        } catch (ArgumentNullException) {
+            // Disposing during a blocked wait clears the semaphore's lock under it, and Mono reports it this way
+            return -1;
         }
 
         if (!tryTakeSuccess) {

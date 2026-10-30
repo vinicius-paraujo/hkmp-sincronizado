@@ -449,12 +449,7 @@ internal class SaveManager {
                 }
 
                 if (SaveDataMapping.GeoRockBools.TryGetValue(itemData, out var shouldSync) && shouldSync) {
-                    if (!_entityManager.IsSceneHost) {
-                        Logger.Info(
-                            $"Not scene host, not sending geo rock save update ({itemData.Id}, {itemData.SceneName})");
-                        continue;
-                    }
-                    
+                    // Any player can strike a rock, and the host's copy never sees that hit; the server keeps the lowest
                     if (!SaveDataMapping.GeoRockIndices.TryGetValue(itemData, out var index)) {
                         Logger.Info(
                             $"Cannot find geo rock save data index, not sending save update ({itemData.Id}, {itemData.SceneName})");
@@ -516,8 +511,10 @@ internal class SaveManager {
                     continue;
                 }
                 
-                // If we should do the scene host check and the player is not scene host, skip sending
-                if (!varProps.IgnoreSceneHost && !_entityManager.IsSceneHost) {
+                // If we should do the scene host check and the player is not scene host, skip sending. A bool that
+                // becomes true records something this player did (a lever pulled, a wall broken, an item taken), which
+                // the host never sees happen, so it is sent regardless of who hosts the scene.
+                if (!varProps.IgnoreSceneHost && !_entityManager.IsSceneHost && !value) {
                     Logger.Info(
                         $"Not scene host, not sending persistent bool save update ({itemData.Id}, {itemData.SceneName})");
                     continue;

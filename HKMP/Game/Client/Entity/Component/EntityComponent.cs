@@ -27,7 +27,7 @@ internal abstract class EntityComponent {
     /// <summary>
     /// Whether the entity is controlled.
     /// </summary>
-    public bool IsControlled { get; set; }
+    public virtual bool IsControlled { get; set; }
 
     protected EntityComponent(
         NetClient netClient,

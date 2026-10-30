@@ -169,6 +169,8 @@ internal class DtlsClient {
             } catch (OperationCanceledException) {
                 Logger.Debug("OperationCanceledException");
                 break;
+            } catch (ObjectDisposedException) {
+                break;
             }
         }
         
@@ -182,7 +184,20 @@ internal class DtlsClient {
     private void DtlsReceiveLoop(CancellationToken cancellationToken) {
         while (!cancellationToken.IsCancellationRequested && DtlsTransport != null) {
             var buffer = new byte[MaxPacketSize];
-            var length = DtlsTransport.Receive(buffer, 0, buffer.Length, 5);
+            int length;
+
+            // Disconnect can run on another thread at any point here, and an escaping exception would surface as
+            // unhandled on this thread during a reconnection
+            try {
+                var transport = DtlsTransport;
+                if (transport == null) break;
+                length = transport.Receive(buffer, 0, buffer.Length, 5);
+            } catch (Exception e) when (e is TlsFatalAlert or ObjectDisposedException or NullReferenceException) {
+                if (cancellationToken.IsCancellationRequested) break;
+                Logger.Debug($"DTLS receive failed: {e.Message}");
+                continue;
+            }
+
             if (length >= 0) {
                 DataReceivedEvent?.Invoke(buffer, length);
             }

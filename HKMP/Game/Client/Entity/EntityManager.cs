@@ -153,6 +153,23 @@ internal class EntityManager {
     }
 
     /// <summary>
+    /// Updates the entity manager if the server gave the scene host role to another player.
+    /// </summary>
+    public void LoseSceneHost() {
+        Logger.Info("No longer scene host");
+
+        IsSceneHost = false;
+
+        foreach (var entity in _entities.Values) {
+            try {
+                entity.MakeClient();
+            } catch (Exception e) {
+                Logger.Error($"Could not make entity ({entity.Id}, {entity.Type}) a client entity:\n{e}");
+            }
+        }
+    }
+
+    /// <summary>
     /// Spawn an entity with the given ID and type, that was spawned from the given entity type.
     /// </summary>
     /// <param name="id">The ID of the entity.</param>
