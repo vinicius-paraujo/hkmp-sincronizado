@@ -1343,7 +1343,7 @@ internal abstract class ServerManager : IServerManager {
         if (_playerData.Values.Any(player => string.Equals(player.Username, clientInfo.Username, StringComparison.OrdinalIgnoreCase))) {
             Logger.Info("Connection rejected: username already in use; existing session preserved");
             serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-            serverInfo.ConnectionRejectedMessage = "Username already in use";
+            serverInfo.ConnectionRejectedMessage = Hkmp.Networking.ConnectionRejection.UsernameInUse;
             return;
         }
 

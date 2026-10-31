@@ -1,3 +1,24 @@
 {
-  "nameInUse": "Não foi possível conectar: este nome já está em uso. Escolha outro nome e tente novamente."
+  "menuButton": "Iniciar multijogador",
+  "title": "Multijogador",
+  "join": "Entrar",
+  "host": "Hospedar",
+  "name": "Nome do jogador",
+  "address": "Endereço do servidor",
+  "port": "Porta",
+  "connect": "Conectar",
+  "connecting": "Conectando...",
+  "open": "Abrir servidor",
+  "hidden": "Oculto",
+  "hostHint": "Você escolhe o jogo salvo a seguir.",
+  "connected": "Conectado.",
+  "noResponse": "Não foi possível alcançar o servidor. Confira o endereço e a porta.",
+  "nameInUse": "Este nome já está em uso. Escolha outro.",
+  "versionMismatch": "Sua versão é diferente da do servidor. Atualize o Sincroniza.",
+  "internalError": "A conexão falhou. Tente de novo.",
+  "rejected": "O servidor recusou a conexão.",
+  "addressMissing": "Informe o endereço do servidor.",
+  "portInvalid": "Informe uma porta válida.",
+  "nameMissing": "Informe o nome do jogador.",
+  "nameTooLong": "Este nome é longo demais."
 }

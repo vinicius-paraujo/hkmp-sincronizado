@@ -114,6 +114,7 @@ internal class ButtonComponent : Component, IButtonComponent {
         _text.font = font;
         _text.fontSize = fontSize;
         _text.alignment = TextAnchor.MiddleCenter;
+        _text.supportRichText = true;
         _text.color = textColor;
 
         // Set the transform parent to the ButtonComponent gameObject
@@ -161,6 +162,15 @@ internal class ButtonComponent : Component, IButtonComponent {
     /// <inheritdoc />
     public void SetText(string text) {
         _text.text = text;
+    }
+
+    /// <summary>
+    /// Sets the color of the text, keeping its current opacity.
+    /// </summary>
+    /// <param name="color">The color.</param>
+    public void SetTextColor(Color color) {
+        color.a *= _text.color.a > 0f ? 1f : 0f;
+        _text.color = color;
     }
 
     /// <inheritdoc />

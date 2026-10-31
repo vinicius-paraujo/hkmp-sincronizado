@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hkmp.Ui.Resources;
 using UnityEngine;
 
 namespace Hkmp.Ui.Component;
@@ -32,12 +33,30 @@ internal class IpInputComponent : HiddenInputComponent {
         placeholderText,
         UiManager.NormalFontSize
     ) {
-        InputField.onValidateInput += (text, index, addedChar) => {
-            if (BlacklistedChars.Contains(addedChar)) {
-                return '\0';
-            }
-
-            return addedChar;
-        };
+        InputField.onValidateInput += Validate;
     }
+
+    public IpInputComponent(
+        ComponentGroup componentGroup,
+        Vector2 position,
+        Vector2 size,
+        string defaultValue,
+        string placeholderText,
+        MultiStateSprite bgSprite,
+        int fontSize
+    ) : base(
+        componentGroup,
+        position,
+        size,
+        defaultValue,
+        placeholderText,
+        bgSprite,
+        FontManager.UIFontRegular,
+        fontSize
+    ) {
+        InputField.onValidateInput += Validate;
+    }
+
+    private static char Validate(string text, int index, char addedChar) =>
+        BlacklistedChars.Contains(addedChar) ? '\0' : addedChar;
 }

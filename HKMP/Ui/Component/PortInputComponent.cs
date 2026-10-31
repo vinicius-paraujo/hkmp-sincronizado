@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hkmp.Ui.Resources;
 using UnityEngine;
 
 namespace Hkmp.Ui.Component;
@@ -26,12 +27,31 @@ internal class PortInputComponent : InputComponent {
         placeholderText,
         characterLimit: 5
     ) {
-        InputField.onValidateInput += (text, index, addedChar) => {
-            if (!AllowedChars.Contains(addedChar)) {
-                return '\0';
-            }
-
-            return addedChar;
-        };
+        InputField.onValidateInput += Validate;
     }
+
+    public PortInputComponent(
+        ComponentGroup componentGroup,
+        Vector2 position,
+        Vector2 size,
+        string defaultValue,
+        string placeholderText,
+        MultiStateSprite bgSprite,
+        int fontSize
+    ) : base(
+        componentGroup,
+        position,
+        size,
+        defaultValue,
+        placeholderText,
+        bgSprite,
+        FontManager.UIFontRegular,
+        fontSize,
+        characterLimit: 5
+    ) {
+        InputField.onValidateInput += Validate;
+    }
+
+    private static char Validate(string text, int index, char addedChar) =>
+        AllowedChars.Contains(addedChar) ? addedChar : '\0';
 }

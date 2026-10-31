@@ -1,3 +1,24 @@
 {
-  "nameInUse": "Could not connect: this name is already in use. Choose a different name and try again."
+  "menuButton": "Start Multiplayer",
+  "title": "Multiplayer",
+  "join": "Join",
+  "host": "Host",
+  "name": "Player name",
+  "address": "Server address",
+  "port": "Port",
+  "connect": "Connect",
+  "connecting": "Connecting...",
+  "open": "Open server",
+  "hidden": "Hidden",
+  "hostHint": "You choose the save next.",
+  "connected": "Connected.",
+  "noResponse": "Could not reach the server. Check the address and port.",
+  "nameInUse": "This name is already in use. Choose another.",
+  "versionMismatch": "Your version does not match the server. Update Sincroniza.",
+  "internalError": "The connection failed. Try again.",
+  "rejected": "The server refused the connection.",
+  "addressMissing": "Enter the server address.",
+  "portInvalid": "Enter a valid port.",
+  "nameMissing": "Enter a player name.",
+  "nameTooLong": "This name is too long."
 }

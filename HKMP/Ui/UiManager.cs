@@ -228,7 +228,7 @@ internal class UiManager : IUiManager {
 
         ModHooks.LanguageGetHook += (key, sheet, orig) => {
             if (key == "StartMultiplayerBtn" && sheet == "MainMenu") {
-                return "Start Multiplayer";
+                return ConnectionFeedback.Get("menuButton");
             }
             
             if (key == "MODAL_PROGRESS" && sheet == "MainMenu" && _netClient.IsConnected) {
@@ -462,6 +462,9 @@ internal class UiManager : IUiManager {
                 }, out _);
             }
         ).Build();
+
+        // The title stands alone on this screen, without the ornament of the game's menus
+        ((UnityEngine.Component) typeof(MenuScreen).GetField("topFleur").GetValue(_connectMenu)).gameObject.SetActive(false);
     }
     
     /// <summary>
@@ -507,6 +510,14 @@ internal class UiManager : IUiManager {
         UM.currentDynamicMenu = _connectMenu;
         UM.menuState = MainMenuState.DYNAMIC_MENU;
 
+        foreach (var text in _connectMenu.GetComponentsInChildren<UnityEngine.UI.Text>(true)) {
+            // The form draws the title above its backing, which would otherwise dim this one
+            if (text.text == "HKMP") {
+                text.text = "";
+            }
+        }
+
+        _connectInterface.RefreshLanguage();
         _connectGroup.SetActive(true);
     }
 

@@ -14,6 +14,11 @@ internal static class FontManager {
     public static Font UIFontRegular;
 
     /// <summary>
+    /// The font of the game's menu titles and buttons.
+    /// </summary>
+    public static Font UITitleFont;
+
+    /// <summary>
     /// The font used for usernames above player objects.
     /// </summary>
     public static TMP_FontAsset InGameNameFont;
@@ -27,6 +32,9 @@ internal static class FontManager {
                 case "Perpetua":
                     UIFontRegular = font;
                     break;
+                case "TrajanPro-Bold":
+                    UITitleFont = font;
+                    break;
             }
         }
 
@@ -36,6 +44,10 @@ internal static class FontManager {
                     InGameNameFont = textMeshProFont;
                     break;
             }
+        }
+
+        if (UITitleFont == null) {
+            UITitleFont = UIFontRegular;
         }
 
         if (UIFontRegular == null) {

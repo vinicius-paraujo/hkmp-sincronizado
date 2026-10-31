@@ -172,6 +172,22 @@ internal class InputComponent : Component, IInputComponent {
         Text.color = color;
     }
 
+    /// <summary>
+    /// Aligns the typed text and the placeholder to the left.
+    /// </summary>
+    public void SetLeftAligned() {
+        Text.alignment = TextAnchor.MiddleLeft;
+        ((Text) InputField.placeholder).alignment = TextAnchor.MiddleLeft;
+    }
+
+    /// <summary>
+    /// Tints the background image, which is how a field without a box shows an error.
+    /// </summary>
+    /// <param name="color">The tint.</param>
+    public void SetLineColor(Color color) {
+        Image.color = color;
+    }
+
     /// <inheritdoc />
     public void SetInteractable(bool interactable) {
         Interactable = interactable;

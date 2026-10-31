@@ -12,7 +12,7 @@ internal class HiddenInputComponent : InputComponent {
     /// <summary>
     /// The text that appears when the input is hidden.
     /// </summary>
-    private const string HiddenText = "Hidden";
+    private static string HiddenText => ConnectionFeedback.Get("hidden");
 
     /// <summary>
     /// String that stores the current input if it is not displayed.
@@ -44,7 +44,7 @@ internal class HiddenInputComponent : InputComponent {
     ) {
     }
 
-    private HiddenInputComponent(
+    protected HiddenInputComponent(
         ComponentGroup componentGroup,
         Vector2 position,
         Vector2 size,

@@ -32,6 +32,17 @@ internal abstract class Component : IComponent {
     /// </summary>
     private readonly ComponentGroup _componentGroup;
 
+    /// <summary>
+    /// Whether new components keep a fixed distance from the screen centre. Proportional anchors stretch
+    /// distances but not sizes when the window is not 16:9, which pulls apart edges meant to line up.
+    /// </summary>
+    public static bool CreateCentered { get; set; }
+
+    /// <summary>
+    /// Whether this component keeps a fixed distance from the screen centre.
+    /// </summary>
+    private readonly bool _centered = CreateCentered;
+
     protected Component(ComponentGroup componentGroup, Vector2 position, Vector2 size) {
         // Create a gameobject with the CanvasRenderer component, so we can render as GUI
         GameObject = new GameObject();
@@ -42,11 +53,7 @@ internal abstract class Component : IComponent {
         // Create a RectTransform with the desired size
         _transform = GameObject.AddComponent<RectTransform>();
 
-        position = new Vector2(
-            position.x / 1920f,
-            position.y / 1080f
-        );
-        _transform.anchorMin = _transform.anchorMax = position;
+        ApplyPosition(position);
 
         _transform.sizeDelta = size;
 
@@ -79,6 +86,10 @@ internal abstract class Component : IComponent {
 
     /// <inheritdoc />
     public Vector2 GetPosition() {
+        if (_centered) {
+            return _transform.anchoredPosition + new Vector2(960f, 540f);
+        }
+
         var position = _transform.anchorMin;
         return new Vector2(
             position.x * 1920f,
@@ -88,6 +99,16 @@ internal abstract class Component : IComponent {
 
     /// <inheritdoc />
     public void SetPosition(Vector2 position) {
+        ApplyPosition(position);
+    }
+
+    private void ApplyPosition(Vector2 position) {
+        if (_centered) {
+            _transform.anchorMin = _transform.anchorMax = new Vector2(0.5f, 0.5f);
+            _transform.anchoredPosition = position - new Vector2(960f, 540f);
+            return;
+        }
+
         _transform.anchorMin = _transform.anchorMax = new Vector2(
             position.x / 1920f,
             position.y / 1080f

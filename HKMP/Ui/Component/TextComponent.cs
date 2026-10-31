@@ -75,6 +75,14 @@ internal class TextComponent : Component, ITextComponent {
         _textObject.text = text;
     }
 
+    /// <summary>
+    /// Sets the font of the text.
+    /// </summary>
+    /// <param name="font">The font.</param>
+    public void SetFont(Font font) {
+        _textObject.font = font;
+    }
+
     /// <inheritdoc />
     public void SetColor(Color color) {
         _textObject.color = color;
