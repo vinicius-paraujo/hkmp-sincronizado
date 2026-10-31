@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using Hkmp.Game.Client.Entity.Action;
 using Hkmp.Networking.Client;
@@ -124,12 +124,20 @@ internal class SpawnJarComponent : EntityComponent {
         MonoBehaviourUtil.Instance.StartCoroutine(Behaviour());
         IEnumerator Behaviour() {
             var jar = _spawnJar.Client;
+            // The jar can be gone when the update arrives after a change of scene host.
+            if (jar == null) {
+                yield break;
+            }
 
             jar.transform.SetPositionZ(0.01f);
             
             jar.readyDust.Play();
 
             yield return new WaitForSeconds(0.5f);
+
+            if (jar == null) {
+                yield break;
+            }
 
             var body = jar.GetComponent<Rigidbody2D>();
             body.angularVelocity = Random.Range(0, 2) > 0 ? -300f : 300f;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -182,6 +182,11 @@ internal static class EntityFsmActions {
     /// <param name="gameObject">The game object to check for.</param>
     /// <returns>true if the given game object is in the entity registry; otherwise false.</returns>
     private static bool IsObjectInRegistry(GameObject gameObject) {
+        // An action can target an object that was destroyed earlier in the fight; it is not an entity then.
+        if (gameObject == null) {
+            return false;
+        }
+
         return EntityRegistry.TryGetEntry(gameObject, out _);
     }
     
@@ -854,7 +859,7 @@ internal static class EntityFsmActions {
 
     private static bool GetNetworkDataFromAction(EntityNetworkData data, SetScale action) {
         var gameObject = action.Fsm.GetOwnerDefaultTarget(action.gameObject);
-        if (gameObject == action.Fsm.GameObject) {
+        if (gameObject == null || gameObject == action.Fsm.GameObject) {
             return false;
         }
 
