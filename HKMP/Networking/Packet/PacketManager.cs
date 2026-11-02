@@ -872,36 +872,21 @@ internal class PacketManager {
     /// necessarily contain received bytes. Rather, the first <paramref name="numReceived"/> bytes are received data.
     /// </param>
     /// <param name="numReceived">Number of received bytes in the buffer.</param>
-    /// <param name="leftoverData">Reference byte array that should be filled with leftover data.</param>
+    /// <param name="fragments">The fragments received from this sender so far.</param>
     /// <returns>A list of packets that were constructed from the received data.</returns>
-    public static List<Packet> HandleReceivedData(byte[] buffer, int numReceived, ref byte[] leftoverData) {
+    public static List<Packet> HandleReceivedData(byte[] buffer, int numReceived, PacketFragments fragments) {
         // Make a new byte array exactly the length of number of received bytes and fill it
         var receivedData = new byte[numReceived];
-        for (var i = 0; i < numReceived; i++) {
-            receivedData[i] = buffer[i];
+        Array.Copy(buffer, receivedData, numReceived);
+
+        var readyData = fragments.Receive(receivedData);
+        if (readyData == null) {
+            return new List<Packet>();
         }
 
-        var currentData = receivedData;
-
-        // Check whether we have leftover data from the previous read, and concatenate the two byte arrays
-        if (leftoverData is { Length: > 0 }) {
-            currentData = new byte[leftoverData.Length + receivedData.Length];
-
-            // Copy over the leftover data into the current data array
-            for (var i = 0; i < leftoverData.Length; i++) {
-                currentData[i] = leftoverData[i];
-            }
-
-            // Copy over the trimmed data into the current data array
-            for (var i = 0; i < receivedData.Length; i++) {
-                currentData[leftoverData.Length + i] = receivedData[i];
-            }
-
-            leftoverData = null;
-        }
-
-        // Create packets from the data
-        return ByteArrayToPackets(currentData, ref leftoverData);
+        // Bytes that do not form a whole packet are a damaged datagram: nothing that arrives later can complete them
+        byte[] incomplete = null;
+        return ByteArrayToPackets(readyData, ref incomplete);
     }
 
     /// <summary>

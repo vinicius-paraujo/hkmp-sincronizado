@@ -61,11 +61,6 @@ internal class NetServer : INetServer {
     private readonly AutoResetEvent _processingWaitHandle;
 
     /// <summary>
-    /// Byte array containing leftover data that was not processed as a packet yet.
-    /// </summary>
-    private byte[] _leftoverData;
-
-    /// <summary>
     /// Cancellation token source for all threads of the server.
     /// </summary>
     private CancellationTokenSource _taskTokenSource;
@@ -169,7 +164,7 @@ internal class NetServer : INetServer {
                 var packets = PacketManager.HandleReceivedData(
                     receivedData.Buffer,
                     receivedData.NumReceived,
-                    ref _leftoverData
+                    receivedData.DtlsServerClient.Fragments
                 );
 
                 var dtlsServerClient = receivedData.DtlsServerClient;
@@ -379,8 +374,6 @@ internal class NetServer : INetServer {
         
         _dtlsServer.Stop();
         _dtlsServer.DataReceivedEvent -= OnDataReceived;
-
-        _leftoverData = null;
 
         IsStarted = false;
 

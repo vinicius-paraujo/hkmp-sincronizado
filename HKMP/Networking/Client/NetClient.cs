@@ -88,9 +88,9 @@ internal class NetClient : INetClient {
     private readonly ClientConnectionManager _connectionManager;
 
     /// <summary>
-    /// Byte array containing received data that was not included in a packet object yet.
+    /// The fragments received from the server so far.
     /// </summary>
-    private byte[] _leftoverData;
+    private PacketFragments _fragments = new PacketFragments();
 
     /// <summary>
     /// Construct the net client with the given packet manager.
@@ -209,7 +209,7 @@ internal class NetClient : INetClient {
             return;
         }
         
-        var packets = PacketManager.HandleReceivedData(buffer, length, ref _leftoverData);
+        var packets = PacketManager.HandleReceivedData(buffer, length, _fragments);
         
         foreach (var packet in packets) {
             // Create a ClientUpdatePacket from the raw packet instance,

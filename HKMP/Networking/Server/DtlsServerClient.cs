@@ -9,6 +9,11 @@ namespace Hkmp.Networking.Server;
 /// </summary>
 internal class DtlsServerClient {
     /// <summary>
+    /// The fragments received from this client so far.
+    /// </summary>
+    public Packet.PacketFragments Fragments { get; } = new Packet.PacketFragments();
+
+    /// <summary>
     /// The DTLS transport instance.
     /// </summary>
     public DtlsTransport DtlsTransport { get; init; }

@@ -966,7 +966,9 @@ internal abstract class ServerManager : IServerManager {
                         _netServer.GetUpdateManagerForClient(otherId)?.AddEntityHostFsmData(
                             entityUpdate.Id,
                             fsmIndex,
-                            data
+                            // Each queue merges into what it holds, so sharing one instance lets a merge change
+                            // data another queue is writing, and the receiver cannot parse the result.
+                            data.Snapshot()
                         );
                     }
                 );

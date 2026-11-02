@@ -63,6 +63,11 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private ushort _localSequence;
 
     /// <summary>
+    /// The ID of the next packet that is sent as fragments.
+    /// </summary>
+    private ushort _fragmentedPacketId;
+
+    /// <summary>
     /// The last received sequence number.
     /// </summary>
     private ushort _remoteSequence;
@@ -285,30 +290,15 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         // Increase (and potentially wrap) the current local sequence number
         _localSequence++;
 
-        // Check if the packet exceeds (usual) MTU and break it up if so
+        // A packet over the (usual) MTU is sent as fragments that the receiver can put back together on its own
         if (packet.Length > PacketMtu) {
-            // Get the original packet's bytes as an array
-            var byteArray= packet.ToArray();
-            
-            // Keep track of the index in the original array for copying
-            var index = 0;
-            // While we have not reached the end of the original array yet with the index
-            while (index < byteArray.Length) {
-                // Take the minimum of what's left to copy in the original array and the max MTU
-                var length = System.Math.Min(byteArray.Length - index, PacketMtu);
-                // Create a new array that is this calculated length
-                var newBytes = new byte[length];
-                // Copy over the length of bytes starting from index into the new array
-                Array.Copy(byteArray, index, newBytes, 0, length);
-
-                SendPacket(new Packet.Packet(newBytes));
-
-                index += length;
+            foreach (var fragment in PacketFragments.Split(packet.ToArray(), _fragmentedPacketId++, PacketMtu)) {
+                SendPacket(new Packet.Packet(fragment));
             }
 
             return;
         }
-        
+
         SendPacket(packet);
     }
 
