@@ -1,6 +1,24 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/wordmark-dark.png">
+    <img src="assets/readme/wordmark-light.png" alt="Sincroniza" width="440">
+  </picture>
+</p>
+
+<p align="center"><i>“Whoever has a friend, even a single one, no matter where they find themselves, will never suffer from loneliness.”</i><br><sub>Amyr Klink</sub></p>
+
+<p align="center">
+  <a href="https://github.com/vinicius-paraujo/sincroniza">Sincroniza</a> ·
+  <a href="https://sincroniza.markineo.com.br">Documentation</a> ·
+  <a href="https://discord.gg/HVKdkHvQ9t">Discord</a> ·
+  <a href="https://github.com/Extremelyd1/HKMP">Original HKMP</a>
+</p>
+
+---
+
 # HKMP Sincronizado
 
-A version of [HKMP](https://github.com/Extremelyd1/HKMP) 3.0.0 for [Sincroniza](https://github.com/vinicius-paraujo/sincroniza), a mod that balances and synchronizes multiplayer events in Hollow Knight.
+A version of [HKMP](https://github.com/Extremelyd1/HKMP) 3.0.0 for [Sincroniza](https://github.com/vinicius-paraujo/sincroniza), a mod that balances and synchronizes multiplayer events in Hollow Knight. The Sincroniza installer installs this build, so players don't need to build or install it by hand.
 
 If you don't use Sincroniza, use the [original HKMP](https://github.com/Extremelyd1/HKMP).
 
@@ -11,7 +29,8 @@ Sincroniza runs on top of HKMP. Some problems we found while testing it can't be
 - a player was disconnected after 5 seconds without packets;
 - when the player simulating a room died or left, the boss could freeze for everyone else;
 - an enemy killed by one player stayed dead for the whole group until the end of the save;
-- a player entering a room could miss the initial state of its enemies.
+- a player entering a room could miss the initial state of its enemies;
+- one lost fragment of a large packet could stop a client from reading anything else the server sent.
 
 Each change below says what broke, what we changed and how we tested it.
 
@@ -37,7 +56,7 @@ The first commit of this repository is an exact copy of upstream commit [`f7c35d
 
 - A silent peer is disconnected after 30 seconds instead of 5; the DTLS handshake waits up to 15 seconds.
 - Both sides report when the other side has been silent for 5 seconds and when it answers again. The client exposes these as events, so an addon can pause the game and reconnect from inside it.
-- On the server, a silent scene host hands its rooms to another player in the room, preferring one who is still answering.
+- On the server, a silent scene host hands its rooms to another player in the room, preferring one who is still answering. The previous host is told too, so it stops simulating the room when it comes back.
 - **Upstream:** when a player disconnects, the scene host is transferred before the player is removed. Before, the removal came first, the transfer found no player and the room was left without a host.
 - **Upstream:** logging in again with the same name and the same authentication key replaces the stale session instead of being refused as "name in use". A clear message explains when a name really is taken.
 - **Upstream:** the chunk sender resets its slice index and acknowledgements at the start of each chunk. Before, a second large transfer in the same process overflowed the index and the reconnection stayed in `Connecting` forever.
@@ -67,6 +86,24 @@ These changes are mostly data, in `Resource/save-data.json`, which says for each
 - **Upstream:** 832 room objects that reset when resting at a bench are marked semi-persistent, and the server can forget their state on request. Before, an enemy killed by anyone stayed dead for the whole group until the end of the save.
 - The two-stop lifts of the Stag stations and Crystal Peak are synced entities, like the City lifts. Before, each player simulated their own lift, and whoever stayed behind saw the other player float.
 
+### Packet delivery
+
+These changes alter the packet format, so the client and the server must use the same build of this fork.
+
+- **Upstream:** a packet larger than 1200 bytes was cut into several datagrams with no fragment header, and the receiver joined them assuming none was lost or reordered. One lost fragment misaligned every packet read after it, and the client stopped processing the server's updates until it reconnected. Each fragment now carries the packet's identifier, its index and the total. The receiver reassembles fragments in any order and discards an incomplete packet after one second, which is then treated like any other lost packet.
+- Lost reliable data is kept once per packet until the other side confirms it, and each round of resends is limited in size. Before, resent data was added to the next packet, and a burst of losses built ever larger packets that were easier to lose again.
+- **Upstream:** a client reused its update state across connections, so after a reconnection its acknowledgements pointed to the previous session's packet numbers and the server kept resending data. The state is reset at the start of each connection.
+- The server numbers its scene host decisions. A resent decision that arrives after a newer one is ignored, so it can't give the role back to a player who already lost it.
+
+**Verified** by unit tests for fragment reassembly, pending resends and decision order, and in game with a battery of 11 boss fights between two copies, five on the same machine and six over an internet tunnel, with no reconnection pause.
+
+### Joining and hosting
+
+- **Upstream:** the server finished a login before the response was queued, and a rejected client kept its session, so a retry couldn't connect. A login now completes with its response, and a rejected attempt is released before the retry.
+- **Upstream:** the server save lives as long as the game. Hosting again in the same game kept the previous session's players, and a new game was seeded from the save loaded before it. Each hosted session now starts empty.
+- **Upstream:** receiving the save always enabled the dash, so every player who joined could dash without the Mothwing Cloak.
+- The multiplayer menu was redesigned, with its text and connection errors translated into the game's language. A rejected connection says why, such as a name already in use or a different Sincroniza version.
+
 ### Thread safety
 
 - **Upstream:** when a player enters a room, the server builds the "already in scene" packet with a copy of each entity's state-machine data, taken under a lock. Before, the packet referenced the live data, and the send thread could read it while the scene host's updates were being merged into it. The packet then failed with "Collection was modified", and the player entering the room got no initial state for that room's entities.
@@ -81,7 +118,6 @@ These changes are mostly data, in `Resource/save-data.json`, which says for each
 
 ## Known issues
 
-- **Two scene hosts after a one-way drop.** The server moves the scene host role after 5 seconds of silence but only tells the new host. If the old host never noticed the drop, both players keep simulating the room. Other players then see enemies that don't die or move twice. This comes from the connection drop tolerance above. It has not been reproduced in game yet; a scenario to reproduce it is prepared.
 - Compatibility with other HKMP addons has not been tested.
 
 ## Building
@@ -99,7 +135,7 @@ Requirements: the .NET SDK and a Hollow Knight 1.5 install with the [Modding API
 
 ## Tests
 
-`HKMP.Tests` covers the parts of the fork that can run without the game: the handover position, the child state of entities and the copy of state-machine data across threads. It compiles those source files directly against small doubles of the Unity types, so it needs no game assemblies.
+`HKMP.Tests` covers the parts of the fork that can run without the game: the handover position, the child state of entities, the copy of state-machine data across threads, fragment reassembly, pending resends and the order of scene host decisions. It compiles those source files directly against small doubles of the Unity types, so it needs no game assemblies.
 
 ```
 dotnet test HKMP.Tests
