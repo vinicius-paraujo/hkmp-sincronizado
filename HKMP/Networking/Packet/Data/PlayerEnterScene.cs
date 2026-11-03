@@ -108,6 +108,11 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
     public bool SceneHost { get; set; }
 
     /// <summary>
+    /// The position of this decision among the server's scene host decisions for this player.
+    /// </summary>
+    public uint RoleDecision { get; set; }
+
+    /// <summary>
     /// Construct the client player already in scene data.
     /// </summary>
     public ClientPlayerAlreadyInScene() {
@@ -152,6 +157,7 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
         }
 
         packet.Write(SceneHost);
+        packet.Write(RoleDecision);
     }
 
     /// <inheritdoc />
@@ -205,6 +211,7 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
         }
 
         SceneHost = packet.ReadBool();
+        RoleDecision = packet.ReadUInt();
     }
 }
 

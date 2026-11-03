@@ -166,6 +166,14 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
     }
 
     /// <summary>
+    /// Forget the packets of the previous connection.
+    /// </summary>
+    public void Reset() {
+        _sentQueue.Clear();
+        _firstPacketReceived = false;
+    }
+
+    /// <summary>
     /// Check the congestion after receiving the given sequence number that was acknowledged. We also
     /// switch send rates in this method if the average RTT is consistently high/low.
     /// </summary>
@@ -176,6 +184,7 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
         }
 
         _sentQueue.TryRemove(sequence, out _);
+        _udpUpdateManager.OnPacketConfirmed(sentPacket.Packet);
 
         var stopwatch = sentPacket.Stopwatch;
 

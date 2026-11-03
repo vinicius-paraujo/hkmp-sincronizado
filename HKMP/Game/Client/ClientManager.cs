@@ -159,6 +159,11 @@ internal class ClientManager : IClientManager {
     private bool _sceneHostDetermined;
 
     /// <summary>
+    /// Filters scene host decisions that arrive after a newer one.
+    /// </summary>
+    private readonly RoleOrder _roleOrder = new();
+
+    /// <summary>
     /// Event for when the server settings change after being received from the server.
     /// The parameter for the action is a copy of the last received server settings.
     /// </summary>
@@ -640,6 +645,7 @@ internal class ClientManager : IClientManager {
     /// <param name="serverInfo">The server info received from the server.</param>
     private void OnClientConnect(ServerInfo serverInfo) {
         Logger.Info("Received server info from server");
+        _roleOrder.Reset();
 
         // Update the locally stored server settings
         _serverSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
@@ -808,13 +814,21 @@ internal class ClientManager : IClientManager {
     private void OnPlayerAlreadyInScene(ClientPlayerAlreadyInScene alreadyInScene) {
         Logger.Info("Received AlreadyInScene packet");
 
+        if (!_roleOrder.AcceptRoom(alreadyInScene.RoleDecision)) {
+            Logger.Info("  Ignoring it, this room description is out of date");
+            return;
+        }
+
         foreach (var playerEnterScene in alreadyInScene.PlayerEnterSceneList) {
             Logger.Debug($"Updating already in scene player with ID: {playerEnterScene.Id}");
             OnPlayerEnterScene(playerEnterScene);
         }
 
         if (_fullSynchronisation) {
-            if (alreadyInScene.SceneHost) {
+            // The rest of this packet describes the room and still applies when a newer decision got here first
+            if (!_roleOrder.Accept(alreadyInScene.RoleDecision)) {
+                Logger.Info("  Keeping the scene host role, a newer decision was already applied");
+            } else if (alreadyInScene.SceneHost) {
                 // Notify the entity manager that we are scene host
                 _entityManager.InitializeSceneHost();
             } else {
@@ -1010,6 +1024,11 @@ internal class ClientManager : IClientManager {
         }
 
         Logger.Info($"Received scene host transfer for scene: {hostTransfer.SceneName}");
+
+        if (!_roleOrder.Accept(hostTransfer.RoleDecision)) {
+            Logger.Info("  Ignoring it, a newer scene host decision was already applied");
+            return;
+        }
 
         var currentScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
         if (currentScene != hostTransfer.SceneName) {

@@ -14,12 +14,11 @@ namespace Hkmp.Networking.Server;
 /// Specialization of <see cref="UdpUpdateManager{TOutgoing,TPacketId}"/> for server to client packet sending.
 /// </summary>
 internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, ClientUpdatePacketId> {
-    /// <inheritdoc />
-    public override void ResendReliableData(ClientUpdatePacket lostPacket) {
-        lock (Lock) {
-            CurrentUpdatePacket.SetLostReliableData(lostPacket);
-        }
-    }
+    /// <summary>
+    /// The number of the latest scene host decision for this player. One counter per connection is enough, because
+    /// each client only has to order its own decisions, and it is taken under the lock that orders them.
+    /// </summary>
+    private uint _roleDecision;
 
     /// <summary>
     /// Find or create a packet data instance in the current packet that matches the given ID of a client.
@@ -197,7 +196,8 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     ) {
         lock (Lock) {
             var alreadyInScene = new ClientPlayerAlreadyInScene {
-                SceneHost = sceneHost
+                SceneHost = sceneHost,
+                RoleDecision = ++_roleDecision
             };
             alreadyInScene.PlayerEnterSceneList.AddRange(playerEnterSceneList);
 
@@ -483,7 +483,8 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, new HostTransfer {
                 SceneName = sceneName,
-                IsHost = isHost
+                IsHost = isHost,
+                RoleDecision = ++_roleDecision
             });
         }
     }

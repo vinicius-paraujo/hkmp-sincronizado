@@ -20,15 +20,22 @@ internal class HostTransfer : IPacketData {
     /// </summary>
     public bool IsHost { get; set; } = true;
 
+    /// <summary>
+    /// The position of this decision among the server's scene host decisions for this player.
+    /// </summary>
+    public uint RoleDecision { get; set; }
+
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
         packet.Write(SceneName);
         packet.Write(IsHost);
+        packet.Write(RoleDecision);
     }
 
     /// <inheritdoc />
     public void ReadData(IPacket packet) {
         SceneName = packet.ReadString();
         IsHost = packet.ReadBool();
+        RoleDecision = packet.ReadUInt();
     }
 }

@@ -12,13 +12,6 @@ namespace Hkmp.Networking.Client;
 /// Specialization of <see cref="UdpUpdateManager{TOutgoing,TPacketId}"/> for client to server packet sending.
 /// </summary>
 internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
-    /// <inheritdoc />
-    public override void ResendReliableData(ServerUpdatePacket lostPacket) {
-        lock (Lock) {
-            CurrentUpdatePacket.SetLostReliableData(lostPacket);
-        }
-    }
-
     /// <summary>
     /// Find an existing or create a new PlayerUpdate instance in the current update packet.
     /// </summary>

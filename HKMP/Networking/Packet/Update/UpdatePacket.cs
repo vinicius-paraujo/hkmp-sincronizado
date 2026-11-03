@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Hkmp.Logging;
 using Hkmp.Networking.Packet.Data;
 
@@ -204,26 +205,32 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     }
     
     /// <summary>
-    /// Set the reliable packet data contained in the lost packet as resend data in this one.
+    /// The size of this packet when it was sent.
+    /// </summary>
+    public int SentLength { get; set; }
+
+    /// <summary>
+    /// The sequence numbers of the lost packets whose data this packet carried.
+    /// </summary>
+    public IEnumerable<ushort> ResentSequences => ResendPacketData.Keys.Union(ResendAddonPacketData.Keys);
+
+    /// <summary>
+    /// Set the reliable packet data contained in the lost packet as resend data in this one. Only what the lost
+    /// packet produced itself: data it was resending has its own entry under its original sequence number.
     /// </summary>
     /// <param name="lostPacket">The update packet instance that was lost.</param>
-    public void SetLostReliableData(UpdatePacket<TPacketId> lostPacket) {
-        // Retrieve the lost packet data
-        var lostPacketData = lostPacket.GetPacketData();
+    /// <returns>Whether the lost packet had anything left to resend.</returns>
+    public bool SetLostReliableData(UpdatePacket<TPacketId> lostPacket) {
+        var reliableData = CopyReliableDataDict(lostPacket.NormalPacketData, t => NormalPacketData.ContainsKey(t));
+        if (reliableData.Count > 0) {
+            ResendPacketData[lostPacket.Sequence] = reliableData;
+        }
 
-        // Finally, put the packet data dictionary in the resend dictionary keyed by its sequence number
-        ResendPacketData[lostPacket.Sequence] = CopyReliableDataDict(
-            lostPacketData,
-            t => NormalPacketData.ContainsKey(t)
-        );
-
-        // Retrieve the lost addon data
-        var lostAddonData = lostPacket.GetAddonPacketData();
         // Create a new dictionary of addon data in which we store all reliable data from the lost packet
         // for all addons in the dictionary
         var toResendAddonData = new Dictionary<byte, AddonPacketData>();
 
-        foreach (var idLostDataPair in lostAddonData) {
+        foreach (var idLostDataPair in lostPacket.AddonPacketData) {
             var addonId = idLostDataPair.Key;
             var addonPacketData = idLostDataPair.Value;
 
@@ -235,13 +242,18 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
                     AddonPacketData.TryGetValue(addonId, out var existingAddonData)
                     && existingAddonData.PacketData.ContainsKey(rawPacketId));
 
-            toResendAddonData[addonId] = newAddonPacketData;
+            if (newAddonPacketData.PacketData.Count > 0) {
+                toResendAddonData[addonId] = newAddonPacketData;
+            }
         }
 
-        // Put the addon data dictionary in the resend dictionary keyed by its sequence number
-        ResendAddonPacketData[lostPacket.Sequence] = toResendAddonData;
+        if (toResendAddonData.Count > 0) {
+            ResendAddonPacketData[lostPacket.Sequence] = toResendAddonData;
+        }
+
+        return reliableData.Count > 0 || toResendAddonData.Count > 0;
     }
-    
+
     /// <summary>
     /// Copy all reliable data in the given dictionary of lost packet data into a new dictionary.
     /// </summary>

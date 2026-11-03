@@ -48,9 +48,26 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
 
     /// <summary>
     /// The number of sequence numbers to store in the received queue to construct ack fields with and
-    /// to check against resent data.
+    /// to check against resent data. Resent data keeps its original sequence number and can arrive seconds later,
+    /// so this covers about 18 seconds at the highest send rate, much more than the acknowledgement field needs.
     /// </summary>
-    private const int ReceiveQueueSize = AckSize;
+    private const int ReceiveQueueSize = 1024;
+
+    /// <summary>
+    /// The time in milliseconds before lost data that was resent is sent again without a confirmation.
+    /// </summary>
+    private const long ResendRetryMillis = 250;
+
+    /// <summary>
+    /// The size in bytes of lost data that one packet carries. Packets stay under the MTU this way, and at the
+    /// send rate this still clears about 50 kilobytes per second.
+    /// </summary>
+    private const int ResendBudget = 1000;
+
+    /// <summary>
+    /// The lost packets that the other side has not confirmed yet.
+    /// </summary>
+    private readonly PendingResends<TOutgoing> _pendingResends = new();
 
     /// <summary>
     /// The UDP congestion manager instance.
@@ -75,7 +92,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Fixed-size queue containing sequence numbers that have been received.
     /// </summary>
-    private readonly ConcurrentFixedSizeQueue<ushort> _receivedQueue;
+    private ConcurrentFixedSizeQueue<ushort> _receivedQueue;
 
     /// <summary>
     /// Object to lock asynchronous accesses.
@@ -183,6 +200,17 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// sending update packets and trigger on connection timing out.
     /// </summary>
     public void StartUpdates() {
+        // The client keeps this instance between connections, and a new server counts from zero. Old sequence
+        // numbers here would make every acknowledgement point at packets the server never sent.
+        lock (Lock) {
+            _localSequence = 0;
+            _remoteSequence = 0;
+            _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+            _pendingResends.Clear();
+            _udpCongestionManager.Reset();
+            CurrentUpdatePacket = new TOutgoing();
+        }
+
         _lastSendRate = CurrentSendRate;
         _sendTimer.Start();
         _heartBeatTimer.Start();
@@ -230,6 +258,11 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         // Instruct the packet to drop all resent data that was received already
         packet.DropDuplicateResendData(_receivedQueue.GetCopy());
 
+        // Lost data can arrive more than once, so what gets through now must count as handled too
+        foreach (var resentSequence in packet.ResentSequences) {
+            _receivedQueue.Enqueue(resentSequence);
+        }
+
         // Update the latest remote sequence number if applicable
         if (IsSequenceGreaterThan(sequence, _remoteSequence)) {
             _remoteSequence = sequence;
@@ -247,6 +280,21 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         }
     }
 
+    // TEMPORARY TRACE
+    private long _traceAt;
+    private int _traceN, _traceBytes, _traceMax, _traceSplit, _traceLost;
+    private void ModelTrace(int length) {
+        _traceN++; _traceBytes += length;
+        if (length > _traceMax) _traceMax = length;
+        if (length > PacketMtu) _traceSplit++;
+        var now = System.Diagnostics.Stopwatch.GetTimestamp() * 1000 / System.Diagnostics.Stopwatch.Frequency;
+        if (now - _traceAt < 1000) return;
+        _traceAt = now;
+        var line = $"{System.DateTime.Now:HH:mm:ss} {GetType().Name[0]} {GetHashCode() & 0xffff} {_traceN} {_traceBytes} {_traceMax} {_traceSplit} {_traceLost} {_pendingResends.Count} {AverageRtt}\n";
+        _traceN = _traceBytes = _traceMax = _traceSplit = _traceLost = 0;
+        try { lock (typeof(UdpUpdateManager)) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"net-model-{System.Diagnostics.Process.GetCurrentProcess().ProcessName}.log"), line); } catch { }
+    }
+
     /// <summary>
     /// Create and send the current update packet.
     /// </summary>
@@ -259,6 +307,13 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         TOutgoing updatePacket;
 
         lock (Lock) {
+            _pendingResends.Resend(
+                System.Diagnostics.Stopwatch.GetTimestamp() * 1000 / System.Diagnostics.Stopwatch.Frequency,
+                ResendRetryMillis,
+                ResendBudget,
+                lostPacket => CurrentUpdatePacket.SetLostReliableData(lostPacket)
+            );
+
             CurrentUpdatePacket.Sequence = _localSequence;
             CurrentUpdatePacket.Ack = _remoteSequence;
 
@@ -285,11 +340,13 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             CurrentUpdatePacket = new TOutgoing();
         }
 
+        updatePacket.SentLength = packet.Length;
         _udpCongestionManager.OnSendPacket(_localSequence, updatePacket);
 
         // Increase (and potentially wrap) the current local sequence number
         _localSequence++;
 
+        ModelTrace(packet.Length);
         // A packet over the (usual) MTU is sent as fragments that the receiver can put back together on its own
         if (packet.Length > PacketMtu) {
             foreach (var fragment in PacketFragments.Split(packet.ToArray(), _fragmentedPacketId++, PacketMtu)) {
@@ -345,11 +402,28 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     }
 
     /// <summary>
-    /// Resend the given packet that was (supposedly) lost by adding data that needs to be reliable to the
-    /// current update packet.
+    /// Keep the reliable data of a lost packet until the other side confirms it.
     /// </summary>
-    /// <param name="lostPacket">The packet instance that was lost.</param>
-    public abstract void ResendReliableData(TOutgoing lostPacket);
+    /// <param name="lostPacket">The packet that was lost.</param>
+    public void ResendReliableData(TOutgoing lostPacket) {
+        lock (Lock) {
+            _traceLost++;
+            _pendingResends.Add(lostPacket.Sequence, lostPacket, lostPacket.SentLength);
+        }
+    }
+
+    /// <summary>
+    /// Forget lost data that reached the other side, either in the given packet or as a resend inside it.
+    /// </summary>
+    /// <param name="packet">The packet that was confirmed.</param>
+    public void OnPacketConfirmed(TOutgoing packet) {
+        lock (Lock) {
+            _pendingResends.Confirm(packet.Sequence);
+            foreach (var sequence in packet.ResentSequences) {
+                _pendingResends.Confirm(sequence);
+            }
+        }
+    }
 
     /// <summary>
     /// Send the given packet over the corresponding medium.
