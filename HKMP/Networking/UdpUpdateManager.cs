@@ -280,21 +280,6 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         }
     }
 
-    // TEMPORARY TRACE
-    private long _traceAt;
-    private int _traceN, _traceBytes, _traceMax, _traceSplit, _traceLost;
-    private void ModelTrace(int length) {
-        _traceN++; _traceBytes += length;
-        if (length > _traceMax) _traceMax = length;
-        if (length > PacketMtu) _traceSplit++;
-        var now = System.Diagnostics.Stopwatch.GetTimestamp() * 1000 / System.Diagnostics.Stopwatch.Frequency;
-        if (now - _traceAt < 1000) return;
-        _traceAt = now;
-        var line = $"{System.DateTime.Now:HH:mm:ss} {GetType().Name[0]} {GetHashCode() & 0xffff} {_traceN} {_traceBytes} {_traceMax} {_traceSplit} {_traceLost} {_pendingResends.Count} {AverageRtt}\n";
-        _traceN = _traceBytes = _traceMax = _traceSplit = _traceLost = 0;
-        try { lock (typeof(UdpUpdateManager)) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"net-model-{System.Diagnostics.Process.GetCurrentProcess().ProcessName}.log"), line); } catch { }
-    }
-
     /// <summary>
     /// Create and send the current update packet.
     /// </summary>
@@ -346,7 +331,6 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         // Increase (and potentially wrap) the current local sequence number
         _localSequence++;
 
-        ModelTrace(packet.Length);
         // A packet over the (usual) MTU is sent as fragments that the receiver can put back together on its own
         if (packet.Length > PacketMtu) {
             foreach (var fragment in PacketFragments.Split(packet.ToArray(), _fragmentedPacketId++, PacketMtu)) {
@@ -407,7 +391,6 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <param name="lostPacket">The packet that was lost.</param>
     public void ResendReliableData(TOutgoing lostPacket) {
         lock (Lock) {
-            _traceLost++;
             _pendingResends.Add(lostPacket.Sequence, lostPacket, lostPacket.SentLength);
         }
     }
