@@ -95,9 +95,21 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private ConcurrentFixedSizeQueue<ushort> _receivedQueue;
 
     /// <summary>
+    /// Sequence numbers of lost packets whose data already arrived as a resend. Kept apart from the received queue
+    /// because acknowledging a lost packet would tell the other side that everything it carried arrived, including
+    /// the data it was resending for older packets, which did not.
+    /// </summary>
+    private ConcurrentFixedSizeQueue<ushort> _resentQueue;
+
+    /// <summary>
     /// Object to lock asynchronous accesses.
     /// </summary>
     protected readonly object Lock = new object();
+
+    /// <summary>
+    /// Object to lock so that only one update packet is numbered and sent at a time.
+    /// </summary>
+    private readonly object _sendLock = new object();
 
     /// <summary>
     /// The current instance of the update packet.
@@ -172,6 +184,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
 
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+        _resentQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
 
         CurrentUpdatePacket = new TOutgoing();
 
@@ -206,6 +219,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
             _localSequence = 0;
             _remoteSequence = 0;
             _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+            _resentQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
             _pendingResends.Clear();
             _udpCongestionManager.Reset();
             CurrentUpdatePacket = new TOutgoing();
@@ -256,11 +270,16 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         _receivedQueue.Enqueue(sequence);
 
         // Instruct the packet to drop all resent data that was received already
-        packet.DropDuplicateResendData(_receivedQueue.GetCopy());
+        var handled = _receivedQueue.GetCopy();
+        foreach (var resentSequence in _resentQueue.GetCopy()) {
+            handled.Enqueue(resentSequence);
+        }
+
+        packet.DropDuplicateResendData(handled);
 
         // Lost data can arrive more than once, so what gets through now must count as handled too
         foreach (var resentSequence in packet.ResentSequences) {
-            _receivedQueue.Enqueue(resentSequence);
+            _resentQueue.Enqueue(resentSequence);
         }
 
         // Update the latest remote sequence number if applicable
@@ -284,6 +303,15 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Create and send the current update packet.
     /// </summary>
     private void CreateAndSendUpdatePacket() {
+        // The send timer can fire again before the previous send finished, on another thread. Two sends at once
+        // would number two packets the same, and the second would take the first one's place in the congestion
+        // manager, so the first could be lost without its reliable data ever being resent.
+        lock (_sendLock) {
+            SendNextUpdatePacket();
+        }
+    }
+
+    private void SendNextUpdatePacket() {
         if (DtlsTransport == null) {
             return;
         }
