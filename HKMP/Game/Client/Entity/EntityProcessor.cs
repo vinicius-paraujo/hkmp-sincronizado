@@ -145,12 +145,19 @@ internal class EntityProcessor {
         if (parentClientObject == null) {
             Logger.Info($"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id}'");
 
+            // An arena controller holds the whole arena, enemies included, so a copy of it would duplicate them.
+            // It only needs its machine kept in step for a handover, so it gets an empty stand-in as replica.
+            var replica = foundEntry.Type == EntityType.BattleScene
+                ? new GameObject(gameObject.name + " (no replica)")
+                : null;
+
             entity = new Entity(
                 _netClient,
                 id,
                 foundEntry.Type,
                 gameObject,
-                types: componentTypes
+                replica,
+                componentTypes
             );
         } else {
             Logger.Info($"Registering entity ({foundEntry.Type}) '{gameObject.name}' with ID '{id}' with parent: {parentClientObject.name}");
@@ -182,6 +189,9 @@ internal class EntityProcessor {
         }
 
         _entities[id] = entity;
+
+        // Anything registered after the room loaded was spawned during play, such as a projectile.
+        entity.SpawnedDuringPlay = LateLoad;
 
         Entities.Add(entity);
 

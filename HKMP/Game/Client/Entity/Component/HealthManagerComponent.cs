@@ -31,6 +31,11 @@ internal class HealthManagerComponent : EntityComponent {
     private int _lastHealth = int.MinValue;
     private int? _receivedHealth;
 
+    /// <summary>
+    /// The last health the host reported, kept after a handover consumes <see cref="_receivedHealth"/>.
+    /// </summary>
+    private int? _knownHealth;
+
     public HealthManagerComponent(
         NetClient netClient,
         ushort entityId,
@@ -68,7 +73,10 @@ internal class HealthManagerComponent : EntityComponent {
 
         if (self == _healthManager.Client) {
             if (!_allowDeath) {
-                Logger.Info("HealthManager Die was called on client entity");
+                // Local hits on a replica are feedback only. Left at zero health, the replica would refuse every
+                // further hit and be inherited as such by a handover, so it keeps the health the host reported.
+                Logger.Info("HealthManager Die was called on client entity, keeping it alive with the host's health");
+                self.hp = Mathf.Max(1, _knownHealth ?? 1);
             } else {
                 Logger.Info("HealthManager Die was called on client entity, but it is allowed death");
 
@@ -155,6 +163,17 @@ internal class HealthManagerComponent : EntityComponent {
         }
         _lastHealth = int.MinValue;
         PublishHealth();
+
+        // An enemy that the previous host left without health but alive, for instance because its death never
+        // arrived, would never die and would hold the fight forever. Restoring failed, so it dies here, and as the
+        // new host this copy announces the death to everyone.
+        var original = _healthManager.Host;
+        // Only health the previous host reported counts: some objects start with no health by design.
+        if (original != null && original.gameObject.activeInHierarchy && _knownHealth.HasValue && _knownHealth.Value <= 0
+            && original.hp <= 0 && !original.GetIsDead()) {
+            Logger.Info("Entity was handed over alive without health, killing it");
+            original.Die(null, AttackTypes.Generic, true);
+        }
     }
 
     /// <inheritdoc />
@@ -168,6 +187,11 @@ internal class HealthManagerComponent : EntityComponent {
 
         if (data.Type == EntityComponentType.Health) {
             _receivedHealth = data.Packet.ReadInt();
+            _knownHealth = _receivedHealth;
+            // The replica follows the host's health, so local hits never accumulate into a local death.
+            if (_healthManager.Client != null && _receivedHealth.Value > 0) {
+                _healthManager.Client.hp = _receivedHealth.Value;
+            }
         } else if (data.Type == EntityComponentType.Death) {
             var attackDirection = new float?();
             if (data.Packet.ReadBool()) {

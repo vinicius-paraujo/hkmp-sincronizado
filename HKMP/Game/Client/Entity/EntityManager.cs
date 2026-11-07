@@ -150,6 +150,41 @@ internal class EntityManager {
                 Logger.Error($"Could not make entity ({entity.Id}, {entity.Type}) a host entity:\n{e}");
             }
         }
+
+        // Taking over one entity can switch off a group that holds others, such as an arena wave, so the groups
+        // are only checked once every entity has been taken over.
+        foreach (var entity in _entities.Values) {
+            try {
+                entity.ShowParents();
+            } catch (Exception e) {
+                Logger.Error($"Could not show the parents of entity ({entity.Id}, {entity.Type}):\n{e}");
+            }
+        }
+
+        _keepShownUntil = Time.unscaledTime + KeepShownSeconds;
+        MonoBehaviourUtil.Instance.OnUpdateEvent -= KeepShown;
+        MonoBehaviourUtil.Instance.OnUpdateEvent += KeepShown;
+    }
+
+    /// <summary>
+    /// How long after a handover the enemies that were fighting are kept shown against their room hiding them.
+    /// </summary>
+    private const float KeepShownSeconds = 10f;
+
+    private float _keepShownUntil;
+
+    private void KeepShown() {
+        var settled = Time.unscaledTime > _keepShownUntil || !IsSceneHost;
+        foreach (var entity in _entities.Values) {
+            try {
+                if (settled) entity.SettleAfterHandover();
+                else entity.KeepShown();
+            } catch (Exception e) {
+                Logger.Error($"Could not keep entity ({entity.Id}, {entity.Type}) shown:\n{e}");
+            }
+        }
+
+        if (settled) MonoBehaviourUtil.Instance.OnUpdateEvent -= KeepShown;
     }
 
     /// <summary>

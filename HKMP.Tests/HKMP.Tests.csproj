@@ -7,6 +7,7 @@
 <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
 <Compile Include="../HKMP/Game/Client/Entity/EntityChildState.cs" Link="Production/EntityChildState.cs" />
 <Compile Include="../HKMP/Game/Client/Entity/HandoverPosition.cs" Link="Production/HandoverPosition.cs" />
+<Compile Include="../HKMP/Game/Client/Entity/HandoverBody.cs" Link="Production/HandoverBody.cs" />
 <Compile Include="../HKMP/Networking/Packet/Data/EntityHostFsmData.cs" Link="Production/EntityHostFsmData.cs" />
 <Compile Include="../HKMP/Networking/Packet/PacketFragments.cs" Link="Production/PacketFragments.cs" />
 <Compile Include="../HKMP/Networking/PendingResends.cs" Link="Production/PendingResends.cs" />

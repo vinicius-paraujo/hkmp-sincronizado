@@ -120,6 +120,29 @@ internal class Entity {
     /// </summary>
     private bool _lastIsActive;
 
+
+    /// <summary>
+    /// The scene the original object belongs to, to tell a destroyed enemy from a room being unloaded.
+    /// </summary>
+    private UnityEngine.SceneManagement.Scene _hostScene;
+
+    /// <summary>
+    /// Whether this entity was shown when this client took it over, and is kept shown for a while after.
+    /// </summary>
+    private bool _shownAtHandover;
+
+    /// <summary>
+    /// Whether this entity was registered after its room loaded, because something spawned it during play.
+    /// </summary>
+    public bool SpawnedDuringPlay { get; set; }
+
+    /// <summary>
+    /// Whether the original keeps running on players that are not the scene host. An arena controller counts
+    /// each player's own arrival there, so switching it off would keep a fight from ever starting; it is only kept
+    /// in step through the snapshot, which a handover restores.
+    /// </summary>
+    private bool KeepsOriginalRunning => Type == EntityType.BattleScene;
+
     /// <summary>
     /// Whether to allow the client entity to animate itself.
     /// </summary>
@@ -171,6 +194,8 @@ internal class Entity {
         Object.Client.transform.localScale = _lastScale = _hasParent 
             ? Object.Host.transform.localScale 
             : Object.Host.transform.lossyScale;
+
+        _hostScene = Object.Host.scene;
 
         // The room's own placement of the original object, before any physics can move it on this client.
         _initialPosition = _hasParent ? Object.Host.transform.localPosition : Object.Host.transform.position;
@@ -247,7 +272,7 @@ internal class Entity {
         
         HandleEnemyDeathEffects();
 
-        Object.Host.SetActive(false);
+        if (!KeepsOriginalRunning) Object.Host.SetActive(false);
         Object.Client.SetActive(false);
         
         CheckGodhome();
@@ -422,6 +447,18 @@ internal class Entity {
             );
             
             addedComponentsString += " Collider";
+        }
+
+        var hostRigidbody = Object.Host.GetComponent<Rigidbody2D>();
+        if (hostRigidbody != null) {
+            _components[EntityComponentType.Kinematic] = new KinematicComponent(
+                _netClient,
+                Id,
+                Object,
+                hostRigidbody
+            );
+
+            addedComponentsString += " Kinematic";
         }
 
         var hostDamageHero = Object.Host.GetComponent<DamageHero>();
@@ -621,10 +658,17 @@ internal class Entity {
 
                 _lastIsActive = false;
 
-                _netClient.UpdateManager.UpdateEntityIsActive(
-                    Id,
-                    false
-                );
+                // A host leaving the room destroys every original with it. That says nothing about the enemies,
+                // and the next host would take them over switched off, so only a destruction inside a loaded
+                // room is reported.
+                if (_hostScene.isLoaded) {
+                    _netClient.UpdateManager.UpdateEntityIsActive(
+                        Id,
+                        false
+                    );
+                } else {
+                    Logger.Info($"  Room of entity ({Id}, {Type}) was unloaded, not reporting it inactive");
+                }
             }
 
             return;
@@ -633,7 +677,7 @@ internal class Entity {
         var hostObjectActive = Object.Host.activeSelf;
 
         if (_isControlled) {
-            if (hostObjectActive) {
+            if (hostObjectActive && !KeepsOriginalRunning) {
                 if (!_isSceneHostDetermined) {
                     Logger.Info($"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now");
                     _originalIsActive = true;
@@ -699,8 +743,11 @@ internal class Entity {
             _lastScale = newScale;
         }
 
+        if (_hostScene.isLoaded) PublishPresentation();
+
         var newActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
-        if (newActive != _lastIsActive) {
+        // Likewise, a room being unloaded switches its objects off on the way out.
+        if (newActive != _lastIsActive && (newActive || _hostScene.isLoaded)) {
             _lastIsActive = newActive;
 
             Logger.Info($"Entity '{Object.Host.name}' changed active: {newActive}");
@@ -958,6 +1005,9 @@ internal class Entity {
     public void MakeClient() {
         Logger.Info($"Making entity ({Id}, {Type}) a client entity");
 
+        // A later handover must use what the next host shows, not what this client showed.
+        _presentation = null;
+
         ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
 
         if (Object.Host != null && Object.Client != null) {
@@ -967,9 +1017,9 @@ internal class Entity {
             _hasReceivedPosition = true;
             Object.Client.transform.position = Object.Host.transform.position;
             Object.Client.transform.localScale = Object.Host.transform.lossyScale;
-            Object.Host.SetActive(false);
+            if (!KeepsOriginalRunning) Object.Host.SetActive(false);
             Object.Client.SetActive(hostActive);
-        } else if (Object.Host != null) {
+        } else if (Object.Host != null && !KeepsOriginalRunning) {
             Object.Host.SetActive(false);
         }
 
@@ -985,6 +1035,24 @@ internal class Entity {
     /// </summary>
     public void MakeHost() {
         Logger.Info($"Making entity ({Id}, {Type}) a host entity");
+
+        // A projectile or other body spawned during play cannot be resumed: what drives it, such as its flight
+        // and lifetime, ran on the previous host only, so it would hang in place and keep hurting players. It is
+        // ended instead, and reported inactive so nobody entering the room later receives it again. Spawned
+        // enemies, which have health, are taken over like any other.
+        if (SpawnedDuringPlay && Object.Host != null && Object.Host.GetComponent<HealthManager>() == null) {
+            Logger.Info($"  Spawned entity ({Id}, {Type}) ended at the handover");
+            Object.Host.SetActive(false);
+            Object.Client?.SetActive(false);
+            _isControlled = false;
+            foreach (var component in _components.Values) {
+                component.IsControlled = false;
+            }
+
+            _lastIsActive = false;
+            _netClient.UpdateManager.UpdateEntityIsActive(Id, false);
+            return;
+        }
 
         // If the client object is null, we don't have to care about doing anything for the host object anymore
         if (Object.Client == null) {
@@ -1027,16 +1095,11 @@ internal class Entity {
             Logger.Debug("  Entity has no parent, calculating transform");
 
             var clientPos = HandoverPosition.Choose(_hasReceivedPosition, _receivedPosition, _initialPosition);
-            var parentPos = Vector3.zero;
-            if (Object.Host.transform.parent != null) {
-                parentPos = Object.Host.transform.parent.position;
-            }
-        
-            var newPosX = clientPos.x - parentPos.x;
-            var newPosY = clientPos.y - parentPos.y;
-            var newPosZ = clientPos.z - parentPos.z;
-        
-            Object.Host.transform.localPosition = _lastPosition = new Vector3(newPosX, newPosY, newPosZ);
+
+            // Subtracting the parent's position ignores a scaled or rotated parent and moved such enemies far from
+            // where they were, sometimes under the floor; the world position is placed directly instead.
+            Object.Host.transform.position = clientPos;
+            _lastPosition = Object.Host.transform.position;
             
             // Since the scale of the client object is the entire scale we have and the host object scale can be in a
             // hierarchy, we need to calculate what the new local scale of the host will be to match the client scale
@@ -1062,7 +1125,16 @@ internal class Entity {
             _animator.Host.playAutomatically = false;
         }
 
-        var clientActive = Object.Client.activeSelf;
+        // The replica is switched on and off by several paths, not only by activity reports, so it is the truth.
+        // Local hits no longer run its death, which used to switch it off on this copy alone.
+        // What the previous host last showed is the truth; the replica is only a fallback before any arrived.
+        var clientActive = KeepsOriginalRunning ? Object.Host.activeSelf
+            : _presentation != null ? _presentation.Shown && _presentation.Alive
+            : Object.Client.activeSelf;
+        // A replica only dies when the host announced the death, so a dead replica stays dead even if the host
+        // left before reporting it inactive.
+        var clientHealth = Object.Client.GetComponent<HealthManager>();
+        if (clientHealth != null && clientHealth.GetIsDead()) clientActive = false;
         Object.Client.SetActive(false);
         Object.Host.SetActive(clientActive);
 
@@ -1072,18 +1144,34 @@ internal class Entity {
         // the host object. In Hornet 1 this is necessary because another state sets this property normally in the
         // fight. See the "Wake" or "Refight Ready" state of the "Control" FSM on Hornet 1.
         // For the Mantis Lord and the city and station lifts, this should never be disabled, since they are always kinematic.
+        if (_presentation != null) {
+            var collider = Object.Host.GetComponent<Collider2D>();
+            if (collider != null) collider.enabled = _presentation.Collider;
+            var renderer = Object.Host.GetComponent<MeshRenderer>();
+            if (renderer != null) renderer.enabled = _presentation.Renderer;
+            Logger.Info($"  Entity ({Id}, {Type}) rebuilt from the previous host: {_presentation}");
+        } else {
+            HandoverSpawnState.Apply(Object.Host, Object.Client, $"({Id}, {Type})");
+        }
+
         var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
-        if (rigidBody != null && Type != EntityType.MantisLord && Type != EntityType.CityElevator
-            && Type != EntityType.StationLift
-            // A climber rounds corners only as a kinematic body; with physics on it wedges against the first one.
-            && Object.Host.GetComponent<Climber>() == null) {
-            // A body whose collider is off while it waits, such as the Broken Vessel during its first encounter,
-            // has nothing to stand on: dynamic physics would drop it through the floor of the room.
+        if (rigidBody != null) {
             var hostCollider = Object.Host.GetComponent<Collider2D>();
-            if (hostCollider == null || hostCollider.enabled) {
-                Logger.Debug("  Resetting isKinematic of Rigidbody to ensure physics work for host object");
-                rigidBody.isKinematic = false;
-            }
+            var makeDynamic = Type != EntityType.MantisLord && Type != EntityType.CityElevator
+                && Type != EntityType.StationLift
+                // A climber rounds corners only as a kinematic body; with physics on it wedges against the first one.
+                && Object.Host.GetComponent<Climber>() == null
+                // A body whose collider is off while it waits, such as the Broken Vessel during its first encounter,
+                // has nothing to stand on: dynamic physics would drop it through the floor of the room.
+                && (hostCollider == null || hostCollider.enabled);
+
+            var kinematic = _components.TryGetValue(EntityComponentType.Kinematic, out var component)
+                ? component as KinematicComponent
+                : null;
+            var reported = kinematic?.Received;
+            rigidBody.isKinematic = HandoverBody.Kinematic(reported, rigidBody.isKinematic, makeDynamic);
+            kinematic?.TakenOver();
+            Logger.Info($"  Body of entity ({Id}, {Type}) kinematic: {rigidBody.isKinematic}, as reported: {reported?.ToString() ?? "none"}");
         }
 
         _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
@@ -1140,6 +1228,8 @@ internal class Entity {
                 fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
             }
 
+            HandoverFsmReferences.Fill(fsm, $"({Id}, {Type})");
+
             // Before setting the state, we replace the actions of the to-be state to only include the ones that
             // should be executed again (including actions with "everyFrame" on true or that continuously check
             // collisions for example).
@@ -1160,11 +1250,35 @@ internal class Entity {
             state.Actions = newActions;
             fsm.SetState(snapshot.CurrentState);
             state.Actions = oldActions;
+
+            // The replica's animation can be one the previous host never sent, such as a buried enemy shown
+            // standing; the animation of the state the machine resumes in is the one the enemy really has.
+            foreach (var play in oldActions.OfType<HutongGames.PlayMaker.Actions.Tk2dPlayAnimation>()) {
+                var target = fsm.Fsm.GetOwnerDefaultTarget(play.gameObject);
+                var animator = target == null ? null : target.GetComponent<tk2dSpriteAnimator>();
+                if (animator == null || string.IsNullOrEmpty(play.clipName.Value)) continue;
+                animator.Play(play.clipName.Value);
+                Logger.Info($"  Entity ({Id}, {Type}) plays '{play.clipName.Value}' of the state it resumes in");
+            }
+
+            // The clip the previous host last showed outranks the resumed state's own.
+            if (fsmIndex == 0 && _presentation != null && _presentation.Clip.Length > 0 && _animator.Host != null) {
+                var clip = _animator.Host.GetClipByName(_presentation.Clip);
+                if (clip != null) _animator.Host.Play(clip);
+            }
         }
 
         // Restoring an FSM state does not replay one-shot activation actions from earlier states.
         // Preserve hitboxes such as Gruz Mother's Hero Damager before the new host simulates a frame.
         EntityChildState.Restore(Object.Host, Object.Client);
+
+        // Initialising and resuming the machines can run actions that place the body, such as a spawn that moves
+        // the enemy to where it hides before entering, so the position chosen above is placed once more.
+        if (_hasParent) {
+            Object.Host.transform.localPosition = _lastPosition;
+        } else {
+            Object.Host.transform.position = _lastPosition;
+        }
 
         if (_components.TryGetValue(EntityComponentType.Health, out var health)) {
             ((HealthManagerComponent)health).RestoreHealth();
@@ -1337,7 +1451,113 @@ internal class Entity {
     /// Updates whether the game object for the client entity is active.
     /// </summary>
     /// <param name="active">The new value for active.</param>
+    /// <summary>
+    /// Switches on the parents that keep this entity's original hidden after it was taken over.
+    /// </summary>
+    public void ShowParents() {
+        // An enemy the previous host still had inside its carrier stays there, to be released as in normal play.
+        if (_presentation != null && _presentation.Carried) {
+            _shownAtHandover = false;
+            return;
+        }
+        if (Object.Host != null && !_isControlled) HandoverSpawnState.ShowParents(Object.Host, $"({Id}, {Type})");
+        _shownAtHandover = Object.Host != null && !_isControlled && Object.Host.activeInHierarchy;
+    }
+
+    /// <summary>
+    /// Shows this entity again if its room hid it after the handover while it is still alive.
+    /// </summary>
+    /// <remarks>
+    /// An arena resumed mid-fight can replay a state that switches its wave groups off, hiding enemies that were
+    /// fighting. Only an enemy shown at the handover and not dead is brought back.
+    /// </remarks>
+    public void KeepShown() {
+        if (!_shownAtHandover || _isControlled || Object.Host == null) return;
+        var health = Object.Host.GetComponent<HealthManager>();
+        if (health != null && health.GetIsDead()) {
+            _shownAtHandover = false;
+            return;
+        }
+
+        HandoverSpawnState.ShowParents(Object.Host, $"({Id}, {Type})");
+    }
+
+    /// <summary>
+    /// Stops keeping this entity shown, once the room has settled after a handover.
+    /// </summary>
+    public void SettleAfterHandover() => _shownAtHandover = false;
+
+    /// <summary>
+    /// How often the scene host sends the whole presentation again even without a change, so a lost message is
+    /// corrected by the next one.
+    /// </summary>
+    private const float PresentationRefreshSeconds = 2f;
+
+    /// <summary>The presentation this client last sent as scene host.</summary>
+    private PresentationState _publishedPresentation;
+
+    private float _publishedPresentationAt;
+
+    /// <summary>The presentation the scene host last sent, or null before the first one arrives.</summary>
+    private PresentationState _presentation;
+
+    /// <summary>
+    /// Sends how the original appears whenever that changes and again at intervals.
+    /// </summary>
+    private void PublishPresentation() {
+        var state = PresentationState.Of(Object.Host, IsCarried(Object.Host));
+        var due = Time.unscaledTime - _publishedPresentationAt > PresentationRefreshSeconds;
+        if (!due && state.SameAs(_publishedPresentation)) return;
+        _publishedPresentation = state;
+        _publishedPresentationAt = Time.unscaledTime;
+        var data = new EntityNetworkData { Type = EntityComponentType.Presentation };
+        state.Write(data.Packet);
+        _netClient.UpdateManager.AddEntityData(Id, data);
+    }
+
+    /// <summary>
+    /// Whether another entity still holds the given body, such as a summon that has not released its enemy yet.
+    /// An arena controller holds every enemy of its arena and does not count.
+    /// </summary>
+    private static bool IsCarried(GameObject body) {
+        for (var parent = body.transform.parent; parent != null; parent = parent.parent) {
+            if (EntityRegistry.TryGetEntry(parent.gameObject, out var entry) && entry.Type != EntityType.BattleScene) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Draws the replica the way the scene host shows the entity: visible only when the host shows it alive and
+    /// released, with the same body and animation.
+    /// </summary>
+    private void ApplyPresentation(PresentationState state) {
+        _presentation = state;
+        if (!_isControlled || Object.Client == null) return;
+
+        Object.Client.SetActive(state.Visible);
+        var collider = Object.Client.GetComponent<Collider2D>();
+        if (collider != null) collider.enabled = state.Collider;
+        var renderer = Object.Client.GetComponent<MeshRenderer>();
+        if (renderer != null) renderer.enabled = state.Renderer;
+
+        var animator = _animator.Client;
+        if (state.Visible && animator != null && state.Clip.Length > 0
+            && (animator.CurrentClip == null || animator.CurrentClip.name != state.Clip)) {
+            var clip = animator.GetClipByName(state.Clip);
+            if (clip != null) {
+                _allowClientAnimation = true;
+                animator.Play(clip);
+                _allowClientAnimation = false;
+            }
+        }
+    }
+
     public void UpdateIsActive(bool active) {
+        // The presentation is the whole truth; an activity report must not show what the host hides.
+        if (active && _presentation != null && !_presentation.Visible) active = false;
         if (Object.Client != null) {
             Logger.Debug($"Entity '{Object.Client.name}' received active: {active}");
             Object.Client.SetActive(active);
@@ -1353,10 +1573,20 @@ internal class Entity {
     /// <param name="alreadyInSceneUpdate">Whether this data is from an already in scene update.</param>
     public void UpdateData(List<EntityNetworkData> entityNetworkData, bool alreadyInSceneUpdate) {
         foreach (var data in entityNetworkData) {
+            if (data.Type == EntityComponentType.Presentation) {
+                ApplyPresentation(PresentationState.Read(data.Packet));
+                continue;
+            }
+
             if (data.Type == EntityComponentType.Fsm) {
                 PlayMakerFSM fsm;
                 byte stateIndex;
                 byte actionIndex;
+
+                // A controller kept without a replica, such as an arena, has no client machines to replay on.
+                if (_fsms.Client.Count == 0) {
+                    continue;
+                }
 
                 if (_fsms.Client.Count > 1) {
                     // Do a check on the length of the data
@@ -1425,11 +1655,15 @@ internal class Entity {
                     
                     // Also propagate this state change to the EntityFsmActions class with the client FSM for the
                     // same index
-                    EntityFsmActions.RegisterStateChange(_fsms.Client[fsmIndex].Fsm, stateName);
+                    if (_fsms.Client.Count > fsmIndex) {
+                        EntityFsmActions.RegisterStateChange(_fsms.Client[fsmIndex].Fsm, stateName);
+                    }
                 }
             }
 
-            var fsms = new[] { hostFsm, _fsms.Client[fsmIndex] };
+            var fsms = _fsms.Client.Count > fsmIndex
+                ? new[] { hostFsm, _fsms.Client[fsmIndex] }
+                : new[] { hostFsm };
 
             void CondUpdateVars<TFsm, TBase>(
                 EntityHostFsmData.Type type,
@@ -1448,11 +1682,16 @@ internal class Entity {
                 }
             }
 
-            foreach (var fsm in fsms) {
+            // A controller that keeps running on every player must not have its own values overwritten; the host's
+            // values are only kept in the snapshot for a handover, through a scratch copy of its variables.
+            var variableSets = fsms.Select(machine => KeepsOriginalRunning && machine == hostFsm
+                ? new FsmVariables(machine.FsmVariables)
+                : machine.FsmVariables);
+            foreach (var variables in variableSets) {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Floats,
                     data.Floats,
-                    fsm.FsmVariables.FloatVariables,
+                    variables.FloatVariables,
                     (index, fsmVar, value) => {
                         fsmVar.Value = value;
                         snapshot.Floats[index] = value;
@@ -1461,7 +1700,7 @@ internal class Entity {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Ints,
                     data.Ints,
-                    fsm.FsmVariables.IntVariables,
+                    variables.IntVariables,
                     (index, fsmVar, value) => {
                         fsmVar.Value = value;
                         snapshot.Ints[index] = value;
@@ -1470,7 +1709,7 @@ internal class Entity {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Bools,
                     data.Bools,
-                    fsm.FsmVariables.BoolVariables,
+                    variables.BoolVariables,
                     (index, fsmVar, value) => {
                         fsmVar.Value = value;
                         snapshot.Bools[index] = value;
@@ -1479,7 +1718,7 @@ internal class Entity {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Strings,
                     data.Strings,
-                    fsm.FsmVariables.StringVariables,
+                    variables.StringVariables,
                     (index, fsmVar, value) => {
                         fsmVar.Value = value;
                         snapshot.Strings[index] = value;
@@ -1488,7 +1727,7 @@ internal class Entity {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Vector2s,
                     data.Vec2s,
-                    fsm.FsmVariables.Vector2Variables,
+                    variables.Vector2Variables,
                     (index, fsmVar, value) => {
                         fsmVar.Value = (UnityEngine.Vector2) value;
                         snapshot.Vector2s[index] = (UnityEngine.Vector2) value;
@@ -1497,7 +1736,7 @@ internal class Entity {
                 CondUpdateVars(
                     EntityHostFsmData.Type.Vector3s,
                     data.Vec3s,
-                    fsm.FsmVariables.Vector3Variables,
+                    variables.Vector3Variables,
                     (index, fsmVar, value) => {
                         fsmVar.Value = (Vector3) value;
                         snapshot.Vector3s[index] = (Vector3) value;

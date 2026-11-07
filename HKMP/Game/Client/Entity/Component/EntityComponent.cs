@@ -92,5 +92,8 @@ internal enum EntityComponentType : ushort {
     FlipPlatform,
     DreamPlatform,
     HazardRespawn,
-    Health
+    Health,
+    Kinematic,
+    // How the entity appears on the scene host, sent whole; see PresentationState.
+    Presentation
 }

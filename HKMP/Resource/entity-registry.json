@@ -1,5 +1,10 @@
 [
     {
+        "base_object_name": "Battle Scene",
+        "type": "BattleScene",
+        "fsm_name": "Battle Control"
+    },
+    {
         "base_object_name": "Battle Gate",
         "type": "BattleGate",
         "fsm_name": "BG Control"

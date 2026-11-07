@@ -242,5 +242,7 @@ internal enum EntityType {
     RadiancePlatform,
     RadianceAbyss,
     // Two-stop lifts that move when the knight steps on them: the stagway and Crystal Peak lifts.
-    StationLift
+    StationLift,
+    // The controller of an arena, which counts its waves and starts each one. It has no replica.
+    BattleScene
 }
