@@ -564,7 +564,8 @@ internal class EntityManager {
                 GameObject = obj,
                 IsSceneHost = IsSceneHost,
                 IsSceneHostDetermined = IsSceneHostDetermined,
-                LateLoad = lateLoad
+                LateLoad = lateLoad,
+                FromScene = true
             }.Process();
         }
     }

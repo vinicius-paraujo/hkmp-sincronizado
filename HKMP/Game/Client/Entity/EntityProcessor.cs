@@ -47,6 +47,11 @@ internal class EntityProcessor {
     /// </summary>
     public bool LateLoad { get; init; }
     /// <summary>
+    /// Whether the game object came with a scene, such as a boss scene loaded on top of the room, rather than being
+    /// spawned during play.
+    /// </summary>
+    public bool FromScene { get; init; }
+    /// <summary>
     /// Whether the game object was spawned and should have the designated ID.
     /// </summary>
     public ushort? SpawnedId { get; init; }
@@ -190,8 +195,9 @@ internal class EntityProcessor {
 
         _entities[id] = entity;
 
-        // Anything registered after the room loaded was spawned during play, such as a projectile.
-        entity.SpawnedDuringPlay = LateLoad;
+        // Anything registered after the room loaded was spawned during play, such as a projectile. A scene loaded
+        // on top of the room is not: its arena controller, gates and boss belong to the room and must be taken over.
+        entity.SpawnedDuringPlay = LateLoad && !FromScene;
 
         Entities.Add(entity);
 
