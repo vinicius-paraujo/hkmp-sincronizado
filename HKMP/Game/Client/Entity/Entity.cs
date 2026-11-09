@@ -1125,16 +1125,10 @@ internal class Entity {
             _animator.Host.playAutomatically = false;
         }
 
-        // The replica is switched on and off by several paths, not only by activity reports, so it is the truth.
-        // Local hits no longer run its death, which used to switch it off on this copy alone.
-        // What the previous host last showed is the truth; the replica is only a fallback before any arrived.
-        var clientActive = KeepsOriginalRunning ? Object.Host.activeSelf
-            : _presentation != null ? _presentation.Shown && _presentation.Alive
-            : Object.Client.activeSelf;
-        // A replica only dies when the host announced the death, so a dead replica stays dead even if the host
-        // left before reporting it inactive.
         var clientHealth = Object.Client.GetComponent<HealthManager>();
-        if (clientHealth != null && clientHealth.GetIsDead()) clientActive = false;
+        var clientActive = HandoverActivity.OriginalActive(KeepsOriginalRunning, Object.Host.activeSelf,
+            _presentation?.Shown, _presentation?.Alive, Object.Client.activeSelf,
+            clientHealth != null && clientHealth.GetIsDead());
         Object.Client.SetActive(false);
         Object.Host.SetActive(clientActive);
 

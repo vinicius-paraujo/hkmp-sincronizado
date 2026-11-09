@@ -14,16 +14,6 @@ namespace Hkmp.Game.Client.Entity;
 /// </remarks>
 internal static class HandoverFsmReferences {
     /// <summary>
-    /// Names under which machines keep the knight they chase.
-    /// </summary>
-    private static readonly string[] HeroNames = { "Hero", "Knight", "Target", "Player", "Hero Obj", "Hero Object" };
-
-    /// <summary>
-    /// Names under which machines keep their own object.
-    /// </summary>
-    private static readonly string[] SelfNames = { "Self", "Owner" };
-
-    /// <summary>
     /// Sets each empty reference to the owner or to the local knight, according to its name.
     /// </summary>
     /// <param name="fsm">The resumed machine.</param>
@@ -47,18 +37,11 @@ internal static class HandoverFsmReferences {
         var hero = HeroController.instance == null ? null : HeroController.instance.gameObject;
         foreach (var variable in fsm.FsmVariables.GameObjectVariables) {
             if (variable.Value != null) continue;
-            var value = Matches(variable.Name, SelfNames) ? fsm.gameObject : Matches(variable.Name, HeroNames) ? hero : null;
+            var kind = FsmReferenceName.Of(variable.Name);
+            var value = kind == FsmReferenceName.Kind.Self ? fsm.gameObject : kind == FsmReferenceName.Kind.Hero ? hero : null;
             if (value == null) continue;
             variable.Value = value;
             Logger.Info($"  Reference '{variable.Name}' of {fsm.FsmName} on entity {entity} set to {value.name}");
         }
-    }
-
-    private static bool Matches(string name, string[] names) {
-        foreach (var candidate in names) {
-            if (string.Equals(name, candidate, System.StringComparison.OrdinalIgnoreCase)) return true;
-        }
-
-        return false;
     }
 }
