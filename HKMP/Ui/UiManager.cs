@@ -133,10 +133,15 @@ internal class UiManager : IUiManager {
     private List<EventTrigger.Entry> _originalBackTriggers;
 
     /// <summary>
-    /// Callback action to execute when save slot selection is finished. The boolean parameter indicates whether a
-    /// save slot was selected (true) or the menu was exited through the back button (false). 
+    /// The event trigger of the back button on the save selection screen whose triggers were overridden, or null if
+    /// they are the game's own.
     /// </summary>
-    private Action<bool> _saveSlotSelectedAction;
+    private EventTrigger _overriddenBackTrigger;
+
+    /// <summary>
+    /// The save slot selection opened from the multiplayer menu.
+    /// </summary>
+    private readonly SaveSlotSelection _saveSlotSelection = new();
 
     #endregion
 
@@ -239,6 +244,10 @@ internal class UiManager : IUiManager {
         };
         
         On.UIManager.UIGoToMainMenu += (orig, self) => {
+            // Cancelling the save selection screen (escape or the controller's back button) goes straight to the
+            // main menu without passing through its back button, so the selection has to end here as well
+            EndSaveSlotSelection(false);
+
             orig(self);
 
             TryAddMultiplayerScreen();
@@ -356,29 +365,47 @@ internal class UiManager : IUiManager {
     /// indicates whether a save slot is selected (true) or the back button was pressed (false). Can be null, in which
     /// case no callback is executed.</param>
     public void OpenSaveSlotSelection(Action<bool> callback = null) {
-        _saveSlotSelectedAction = SaveSlotSelectedCallback;
+        // A second press while the screen is opening would otherwise run the hosting twice
+        if (!_saveSlotSelection.Open(callback)) {
+            Logger.Debug("Save slot selection already open, ignoring");
+            return;
+        }
 
         On.GameManager.StartNewGame += OnStartNewGame;
         On.GameManager.ContinueGame += OnContinueGame;
 
         UM.StartCoroutine(GoToSaveMenu());
-        return;
-
-        void SaveSlotSelectedCallback(bool saveSelected) {
-            callback?.Invoke(saveSelected);
-
-            On.GameManager.StartNewGame -= OnStartNewGame;
-            On.GameManager.ContinueGame -= OnContinueGame;
-        }
     }
-    
+
+    /// <summary>
+    /// Ends the open save slot selection, if any: removes its hooks, gives the back button its own triggers back and
+    /// runs its callback.
+    /// </summary>
+    /// <param name="saveSelected">Whether a save was selected.</param>
+    private void EndSaveSlotSelection(bool saveSelected) {
+        if (!_saveSlotSelection.IsOpen) {
+            return;
+        }
+
+        On.GameManager.StartNewGame -= OnStartNewGame;
+        On.GameManager.ContinueGame -= OnContinueGame;
+
+        if (_overriddenBackTrigger) {
+            _overriddenBackTrigger.triggers = _originalBackTriggers;
+        }
+        _overriddenBackTrigger = null;
+        _originalBackTriggers = null;
+
+        _saveSlotSelection.End(saveSelected);
+    }
+
     /// <summary>
     /// Callback method for when a new game is started. This is used to check when to start a hosted server from
     /// the save menu.
     /// </summary>
     private void OnStartNewGame(On.GameManager.orig_StartNewGame orig, GameManager self, bool permaDeathMode, bool bossRushMode) {
         orig(self, permaDeathMode, bossRushMode);
-        _saveSlotSelectedAction.Invoke(true);
+        EndSaveSlotSelection(true);
     }
 
     /// <summary>
@@ -387,7 +414,7 @@ internal class UiManager : IUiManager {
     /// </summary>
     private void OnContinueGame(On.GameManager.orig_ContinueGame orig, GameManager self) {
         orig(self);
-        _saveSlotSelectedAction.Invoke(true);
+        EndSaveSlotSelection(true);
     }
 
     /// <summary>
@@ -536,19 +563,20 @@ internal class UiManager : IUiManager {
             yield break;
         }
 
+        // The selection may have ended while the screen was still opening
+        if (!_saveSlotSelection.IsOpen) {
+            yield break;
+        }
+
         var eventTrigger = saveProfilesBackBtn.GetComponent<EventTrigger>();
         _originalBackTriggers = eventTrigger.triggers;
+        _overriddenBackTrigger = eventTrigger;
 
         eventTrigger.triggers = [];
         ChangeBtnTriggers(eventTrigger, () => {
-            On.GameManager.StartNewGame -= OnStartNewGame;
-            On.GameManager.ContinueGame -= OnContinueGame;
+            EndSaveSlotSelection(false);
 
-            _saveSlotSelectedAction.Invoke(false);
-            
             UM.StartCoroutine(GoToMultiplayerMenu());
-            
-            eventTrigger.triggers = _originalBackTriggers;
         });
     }
 

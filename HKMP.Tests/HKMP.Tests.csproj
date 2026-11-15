@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><IsPackable>false</IsPackable></PropertyGroup>
 <ItemGroup>
 <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
@@ -13,9 +13,11 @@
 <Compile Include="../HKMP/Networking/Packet/Data/EntityHostFsmData.cs" Link="Production/EntityHostFsmData.cs" />
 <Compile Include="../HKMP/Networking/Packet/PacketFragments.cs" Link="Production/PacketFragments.cs" />
 <Compile Include="../HKMP/Networking/PendingResends.cs" Link="Production/PendingResends.cs" />
+<Compile Include="../HKMP/Networking/Client/HeldUpdates.cs" Link="Production/HeldUpdates.cs" />
 <Compile Include="../HKMP/Game/Client/RoleOrder.cs" Link="Production/RoleOrder.cs" />
 <Compile Include="../HKMP/Networking/Packet/IPacket.cs" Link="Production/IPacket.cs" />
 <Compile Include="../HKMP/Math/Vector2.cs" Link="Production/Vector2.cs" />
 <Compile Include="../HKMP/Math/Vector3.cs" Link="Production/Vector3.cs" />
 <Compile Include="../HKMP/Networking/Chunk/ChunkSender.cs" Link="Production/ChunkSender.cs" />
+<Compile Include="../HKMP/Ui/SaveSlotSelection.cs" Link="Production/SaveSlotSelection.cs" />
 </ItemGroup></Project>

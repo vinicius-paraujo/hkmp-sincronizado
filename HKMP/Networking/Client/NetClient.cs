@@ -93,6 +93,11 @@ internal class NetClient : INetClient {
     private PacketFragments _fragments = new PacketFragments();
 
     /// <summary>
+    /// The update packets received after the connection was accepted and before the handlers for them exist.
+    /// </summary>
+    private readonly HeldUpdates<ClientUpdatePacket> _heldUpdates = new HeldUpdates<ClientUpdatePacket>();
+
+    /// <summary>
     /// Construct the net client with the given packet manager.
     /// </summary>
     /// <param name="packetManager">The packet manager instance.</param>
@@ -188,6 +193,7 @@ internal class NetClient : INetClient {
         _dtlsClient.Disconnect();
 
         ConnectionStatus = ClientConnectionStatus.NotConnected;
+        _heldUpdates.Clear();
 
         // Clear all client addon packet handlers, because their IDs become invalid
         _packetManager.ClearClientAddonUpdatePacketHandlers();
@@ -237,7 +243,7 @@ internal class NetClient : INetClient {
 
             // Then, if we are already connected to a server, we let the packet manager handle the rest of the packet
             // data
-            if (ConnectionStatus == ClientConnectionStatus.Connected) {
+            if (ConnectionStatus == ClientConnectionStatus.Connected && !_heldUpdates.Keep(clientUpdatePacket)) {
                 _packetManager.HandleClientUpdatePacket(clientUpdatePacket);
             }
         }
@@ -251,8 +257,19 @@ internal class NetClient : INetClient {
             UpdateManager.TimeoutEvent -= OnConnectTimedOut;
             UpdateManager.TimeoutEvent += OnUpdateTimedOut;
 
+            // The handlers for update packets are registered by the connect callback, on the main thread, so the
+            // packets arriving before it has run are held instead of finding no handler.
+            _heldUpdates.Hold();
+
             // Invoke callback if it exists on the main thread of Unity
-            ThreadUtil.RunActionOnMainThread(() => { ConnectEvent?.Invoke(serverInfo); });
+            ThreadUtil.RunActionOnMainThread(() => {
+                try {
+                    ConnectEvent?.Invoke(serverInfo);
+                } finally {
+                    var released = _heldUpdates.Release(_packetManager.HandleClientUpdatePacket);
+                    if (released > 0) Logger.Debug($"Handed over {released} update packets held until the handlers were registered");
+                }
+            });
 
             ConnectionStatus = ClientConnectionStatus.Connected;
             return;

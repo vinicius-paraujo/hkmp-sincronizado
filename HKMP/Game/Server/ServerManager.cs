@@ -368,7 +368,9 @@ internal abstract class ServerManager : IServerManager {
         // Stop existing server
         if (_netServer.IsStarted) {
             Logger.Info("Server was running, shutting it down before starting");
-            _netServer.Stop();
+            // The full stop also deregisters the commands and handlers, which are registered again below and
+            // refuse to be registered twice
+            Stop();
         }
 
         FullSynchronisation = fullSynchronisation;
