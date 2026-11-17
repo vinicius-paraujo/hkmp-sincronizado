@@ -144,6 +144,12 @@ internal class Entity {
     private bool KeepsOriginalRunning => Type == EntityType.BattleScene;
 
     /// <summary>
+    /// Whether the original object's machines have been initialized, by the game on the first scene host or by an
+    /// earlier handover on this client. Initializing again would repeat one-time setup in the middle of a fight.
+    /// </summary>
+    private bool _originalInitialized;
+
+    /// <summary>
     /// Whether to allow the client entity to animate itself.
     /// </summary>
     private bool _allowClientAnimation;
@@ -965,6 +971,8 @@ internal class Entity {
         }
 
         Object.Host.SetActive(_originalIsActive);
+        // An active original runs its own initialization states, as in a game without other players.
+        _originalInitialized = Object.Host.activeInHierarchy;
 
         // Also update the last active variable to account for this potential change
         // Otherwise we might trigger the update sending of activity twice
@@ -1164,6 +1172,8 @@ internal class Entity {
                 : null;
             var reported = kinematic?.Received;
             rigidBody.isKinematic = HandoverBody.Kinematic(reported, rigidBody.isKinematic, makeDynamic);
+            // The previous host's gravity, not what this original last had when it ran an earlier part of the fight.
+            if (_presentation != null && _presentation.HasBody) rigidBody.gravityScale = _presentation.Gravity;
             kinematic?.TakenOver();
             Logger.Info($"  Body of entity ({Id}, {Type}) kinematic: {rigidBody.isKinematic}, as reported: {reported?.ToString() ?? "none"}");
         }
@@ -1193,13 +1203,21 @@ internal class Entity {
 
         Logger.Debug("  Restoring FSMs from snapshots");
 
+        var initialize = HandoverInitialization.ShouldInitialize(_originalInitialized);
+        Logger.Info($"  Entity ({Id}, {Type}) {(initialize ? "initializes its machines for the first time" : "keeps the setup of its machines")}");
+
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             var fsm = _fsms.Host[fsmIndex];
 
             Logger.Debug($"    Restoring FSM: {fsm.Fsm.Name}");
 
-            // Force initialize the host FSM, since it might have been disabled before initializing
-            EntityInitializer.InitializeFsm(fsm);
+            // An original that never ran is initialized here once; repeating it would undo one-time setup, such as a
+            // child the first initialization detached from the body and kept a reference to.
+            if (initialize) {
+                EntityInitializer.InitializeFsm(fsm);
+            } else {
+                EntityInitializer.CheckPreProcessFsm(fsm);
+            }
             
             var snapshot = _fsmSnapshots[fsmIndex];
 
@@ -1261,6 +1279,8 @@ internal class Entity {
                 if (clip != null) _animator.Host.Play(clip);
             }
         }
+
+        _originalInitialized = true;
 
         // Restoring an FSM state does not replay one-shot activation actions from earlier states.
         // Preserve hitboxes such as Gruz Mother's Hero Damager before the new host simulates a frame.

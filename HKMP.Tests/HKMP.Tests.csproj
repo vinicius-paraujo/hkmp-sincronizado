@@ -9,6 +9,7 @@
 <Compile Include="../HKMP/Game/Client/Entity/HandoverPosition.cs" Link="Production/HandoverPosition.cs" />
 <Compile Include="../HKMP/Game/Client/Entity/HandoverBody.cs" Link="Production/HandoverBody.cs" />
 <Compile Include="../HKMP/Game/Client/Entity/HandoverActivity.cs" Link="Production/HandoverActivity.cs" />
+    <Compile Include="../HKMP/Game/Client/Entity/HandoverInitialization.cs" Link="Production/HandoverInitialization.cs" />
 <Compile Include="../HKMP/Game/Client/Entity/FsmReferenceName.cs" Link="Production/FsmReferenceName.cs" />
 <Compile Include="../HKMP/Networking/Packet/Data/EntityHostFsmData.cs" Link="Production/EntityHostFsmData.cs" />
 <Compile Include="../HKMP/Networking/Packet/PacketFragments.cs" Link="Production/PacketFragments.cs" />

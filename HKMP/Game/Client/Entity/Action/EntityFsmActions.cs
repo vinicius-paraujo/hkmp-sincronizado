@@ -1333,7 +1333,8 @@ internal static class EntityFsmActions {
         }
 
         var transform = gameObject.transform.Find(action.childName.Value);
-        action.storeResult.Value = transform == null ? null : transform.gameObject;
+        action.storeResult.Value = HandoverInitialization.Keep(transform == null ? null : transform.gameObject,
+            action.storeResult.Value, found => found != null);
     }
     
     #endregion
@@ -1423,7 +1424,8 @@ internal static class EntityFsmActions {
     }
     
     private static void ApplyNetworkDataFromAction(EntityNetworkData data, FindAlertRange action) {
-        action.storeResult.Value = AlertRange.Find(action.target.GetSafe(action), action.childName);
+        action.storeResult.Value = HandoverInitialization.Keep<UnityEngine.Object>(
+            AlertRange.Find(action.target.GetSafe(action), action.childName), action.storeResult.Value, found => found != null);
     }
     
     #endregion

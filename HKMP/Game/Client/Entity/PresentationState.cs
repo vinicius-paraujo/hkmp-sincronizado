@@ -14,7 +14,7 @@ namespace Hkmp.Game.Client.Entity;
 /// last; replicas are drawn from it and a new scene host rebuilds the original from it.
 /// </remarks>
 internal sealed class PresentationState {
-    private const byte ShownFlag = 1, AliveFlag = 2, CarriedFlag = 4, ColliderFlag = 8, RendererFlag = 16;
+    private const byte ShownFlag = 1, AliveFlag = 2, CarriedFlag = 4, ColliderFlag = 8, RendererFlag = 16, BodyFlag = 32;
 
     public bool Shown { get; private set; }
     public bool Alive { get; private set; }
@@ -22,6 +22,15 @@ internal sealed class PresentationState {
     public bool Collider { get; private set; }
     public bool Renderer { get; private set; }
     public string Clip { get; private set; } = "";
+
+    /// <summary>Whether the original has a physics body, so <see cref="Gravity"/> describes it.</summary>
+    public bool HasBody { get; private set; }
+
+    /// <summary>
+    /// The body's gravity. States such as a leap switch it on and a later state switches it off; an original that did
+    /// not run those states keeps whatever it had, and without its collider it falls out of the room when taken over.
+    /// </summary>
+    public float Gravity { get; private set; }
 
     /// <summary>Whether a replica drawn from this state should be visible.</summary>
     public bool Visible => Shown && Alive && !Carried;
@@ -34,7 +43,10 @@ internal sealed class PresentationState {
         var collider = body.GetComponent<Collider2D>();
         var renderer = body.GetComponent<MeshRenderer>();
         var animator = body.GetComponent<tk2dSpriteAnimator>();
+        var rigidbody = body.GetComponent<Rigidbody2D>();
         return new PresentationState {
+            HasBody = rigidbody != null,
+            Gravity = rigidbody != null ? rigidbody.gravityScale : 0f,
             Shown = body.activeInHierarchy,
             Alive = health == null || !health.GetIsDead(),
             Carried = carried,
@@ -51,26 +63,33 @@ internal sealed class PresentationState {
         if (Carried) flags |= CarriedFlag;
         if (Collider) flags |= ColliderFlag;
         if (Renderer) flags |= RendererFlag;
+        if (HasBody) flags |= BodyFlag;
         packet.Write(flags);
         packet.Write(Clip);
+        if (HasBody) packet.Write(Gravity);
     }
 
     public static PresentationState Read(Packet packet) {
         var flags = packet.ReadByte();
-        return new PresentationState {
+        var state = new PresentationState {
             Shown = (flags & ShownFlag) != 0,
             Alive = (flags & AliveFlag) != 0,
             Carried = (flags & CarriedFlag) != 0,
             Collider = (flags & ColliderFlag) != 0,
             Renderer = (flags & RendererFlag) != 0,
             Clip = packet.ReadString(),
+            HasBody = (flags & BodyFlag) != 0,
         };
+        if (state.HasBody) state.Gravity = packet.ReadFloat();
+        return state;
     }
 
     public bool SameAs(PresentationState other) =>
         other != null && other.Shown == Shown && other.Alive == Alive && other.Carried == Carried
-        && other.Collider == Collider && other.Renderer == Renderer && other.Clip == Clip;
+        && other.Collider == Collider && other.Renderer == Renderer && other.Clip == Clip
+        && other.HasBody == HasBody && other.Gravity == Gravity;
 
     public override string ToString() =>
-        $"shown {Shown}, alive {Alive}, carried {Carried}, collider {Collider}, renderer {Renderer}, clip '{Clip}'";
+        $"shown {Shown}, alive {Alive}, carried {Carried}, collider {Collider}, renderer {Renderer}, clip '{Clip}'" +
+        (HasBody ? $", gravity {Gravity}" : "");
 }
