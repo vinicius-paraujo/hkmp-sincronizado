@@ -94,6 +94,6 @@ internal enum EntityComponentType : ushort {
     HazardRespawn,
     Health,
     Kinematic,
-    // How the entity appears on the scene host, sent whole; see PresentationState.
-    Presentation
+    // Everything the machines can set on the body, sent whole; see BodyState.
+    Body
 }

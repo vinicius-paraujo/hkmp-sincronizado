@@ -22,7 +22,7 @@ namespace Hkmp.Game.Client.Entity;
 /// A networked entity that is either sending behaviour updates to the server or is entirely controlled by
 /// updates from the server.
 /// </summary>
-internal class Entity {
+internal partial class Entity {
     /// <summary>
     /// The net client for networking.
     /// </summary>
@@ -83,9 +83,17 @@ internal class Entity {
     private bool _originalIsActive;
 
     /// <summary>
-    /// Whether the entity is controlled, i.e. in control by updates from the server.
+    /// What this client does with the entity now: waits for the scene host to be known, runs the original as
+    /// scene host, or follows the scene host with the replica.
     /// </summary>
-    private bool _isControlled;
+    private Role _role;
+
+    private readonly UndeterminedRole _undetermined;
+    private readonly HostRole _host;
+    private readonly ReplicaRole _replica;
+
+    /// <summary>Whether this client runs the original as scene host.</summary>
+    private bool IsHost => _role == _host;
 
     /// <summary>
     /// Whether the scene host is determined, or alternatively whether the entity has been determined to be a host or client entity.
@@ -173,7 +181,10 @@ internal class Entity {
 
         Type = type;
 
-        _isControlled = true;
+        _undetermined = new UndeterminedRole(this);
+        _host = new HostRole(this);
+        _replica = new ReplicaRole(this);
+        SwitchRole(host: false);
 
         if (clientObject == null) {
             Object = new HostClientPair<GameObject> {
@@ -276,12 +287,12 @@ internal class Entity {
         _components = new Dictionary<EntityComponentType, EntityComponent>();
         HandleComponents(types);
         
-        HandleEnemyDeathEffects();
+        EntityDeathEffects.RemoveFromReplica(Type, Object.Client, $"({Id}, {Type})");
 
         if (!KeepsOriginalRunning) Object.Host.SetActive(false);
         Object.Client.SetActive(false);
         
-        CheckGodhome();
+        GodhomeBossDeath.Register(Object.Host, Object.Client, $"({Id}, {Type})");
         
         // // Debug code that logs each action's OnEnter method call
         // foreach (var fsm in _fsms.Host) {
@@ -524,128 +535,12 @@ internal class Entity {
         Logger.Debug(addedComponentsString);
     }
 
-    /// <summary>
-    /// Handle specifics for a set of enemies that rely on EnemyDeathEffects for additional enemies.
-    /// </summary>
-    private void HandleEnemyDeathEffects() {
-        string corpseName;
-        switch (Type) {
-            case EntityType.Ooma:
-                corpseName = "Corpse Jellyfish(Clone)";
-                break;
-            case EntityType.Flukemon:
-                corpseName = "Corpse Flukeman(Clone)";
-                break;
-            case EntityType.HuskHornhead:
-                corpseName = "Zombie Spider 2(Clone)";
-                break;
-            case EntityType.WanderingHusk:
-                corpseName = "Zombie Spider 1(Clone)";
-                break;
-            case EntityType.DungDefender:
-                corpseName = "Corpse Dung Defender(Clone)";
-                break;
-            case EntityType.BrokenVessel:
-                corpseName = "Corpse Infected Knight(Clone)";
-                break;
-            case EntityType.LostKin:
-                corpseName = "Corpse Infected Knight Dream(Clone)";
-                break;
-            default:
-                return;
-        }
-        
-        Logger.Debug($"Entity ({Id}, {Type}) has corpse that is also enemy, deleting death effects and corpse from client entity");
-        
-        var enemyDeathEffects = Object.Client.GetComponent<EnemyDeathEffects>();
-        if (enemyDeathEffects == null) {
-            Logger.Debug("  EnemyDeathEffects is null, cannot remove");
-        }
-        UnityEngine.Object.Destroy(enemyDeathEffects);
-
-        var corpse = Object.Client.FindGameObjectInChildren(corpseName);
-        if (corpse != null) {
-            Logger.Debug($"  Destroying corpse of client object: {corpse.name}");
-            UnityEngine.Object.Destroy(corpse);
-        } else {
-            Logger.Debug("  Could not find corpse of client object");
-        }
-    }
-
-    /// <summary>
-    /// Checks whether this is an enemy in a godhome fight. If that's the case, the health manager of the client
-    /// object will have their death be registered as a trigger for the boss scene controller. This ensures that
-    /// fights will end on scene clients if the client objects die.
-    /// </summary>
-    private void CheckGodhome() {
-        var bossSceneControllers = UnityEngine.Object.FindObjectsOfType<BossSceneController>();
-        var bossSceneController = bossSceneControllers.FirstOrDefault(
-            con => con.gameObject.scene.Equals(UnityEngine.SceneManagement.SceneManager.GetActiveScene())
-        );
-        if (bossSceneController == null) {
-            return;
-        }
-        
-        var hostHealthManager = Object.Host.GetComponent<HealthManager>();
-        if (hostHealthManager == null) {
-            return;
-        }
-        
-        var clientHealthManager = Object.Client.GetComponent<HealthManager>();
-        if (clientHealthManager == null) {
-            Logger.Debug($"Entity ({Id}, {Type}) has HealthManager on host but not on client");
-            return;
-        }
-        
-        if (!bossSceneController.bosses.Contains(hostHealthManager)) {
-            return;
-        }
-        
-        Logger.Debug($"Entity ({Id}, {Type}) is contained in the boss scene controller, registering on death");
-        
-        clientHealthManager.OnDeath += () => {
-            Logger.Debug("OnDeath triggered for health manager in boss scene controller");
-            
-            var bossesLeft = ReflectionHelper.GetField<BossSceneController, int>(bossSceneController, "bossesLeft");
-            ReflectionHelper.SetField(bossSceneController, "bossesLeft", bossesLeft - 1);
-            
-            ReflectionHelper.CallMethod(bossSceneController, "CheckBossesDead");
-        };
-    }
 
     /// <summary>
     /// Callback method for entering a hooked FSM action.
     /// </summary>
     /// <param name="self">The FSM action instance that was entered.</param>
-    private void OnActionEntered(FsmStateAction self) {
-        if (_isControlled) {
-            return;
-        }
-
-        if (!_hookedActions.TryGetValue(self, out var hookedEntityAction)) {
-            return;
-        }
-
-        Logger.Debug(
-            $"Entity ({Id}, {Type}) hooked action: {self.Fsm.Name}, {self.State.Name}, {self.GetType()} ({hookedEntityAction.FsmIndex}, {hookedEntityAction.StateIndex}, {hookedEntityAction.ActionIndex})");
-
-        var networkData = new EntityNetworkData {
-            Type = EntityComponentType.Fsm
-        };
-
-        if (_fsms.Host.Count > 1) {
-            networkData.Packet.Write((byte)hookedEntityAction.FsmIndex);
-        }
-
-        networkData.Packet.Write((byte)hookedEntityAction.StateIndex);
-        networkData.Packet.Write((byte)hookedEntityAction.ActionIndex);
-
-        // Only if the GetNetworkDataFromAction method returns true do we add the entity data
-        // for sending
-        if (EntityFsmActions.GetNetworkDataFromAction(networkData, self)) {
-            _netClient.UpdateManager.AddEntityData(Id, networkData);
-        }
-    }
+    private void OnActionEntered(FsmStateAction self) => _role.OnActionEntered(self);
 
     /// <summary>
     /// Callback method for handling updates.
@@ -680,189 +575,28 @@ internal class Entity {
             return;
         }
 
-        var hostObjectActive = Object.Host.activeSelf;
+        _role.Update(Object.Host.activeSelf);
+    }
 
-        if (_isControlled) {
-            if (hostObjectActive && !KeepsOriginalRunning) {
-                if (!_isSceneHostDetermined) {
-                    Logger.Info($"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now");
-                    _originalIsActive = true;
-                } else {
-                    Logger.Info($"Entity '{Object.Host.name}' host object became active, re-disabling");
-                }
-
-                Object.Host.SetActive(false);
-            }
-
-            return;
+    /// <summary>
+    /// Keeps the original switched off while the scene host is not known yet, and remembers that the room wanted
+    /// it active, so the scene host can switch it on once known.
+    /// </summary>
+    private void KeepOriginalOffUntilSceneHostKnown(bool hostObjectActive) {
+        if (hostObjectActive && !KeepsOriginalRunning) {
+            Logger.Info($"Entity '{Object.Host.name}' host object became active, but scene host is not determined yet, re-disabling for now");
+            _originalIsActive = true;
+            Object.Host.SetActive(false);
         }
+    }
 
-        var transform = Object.Host.transform;
-
-        var newPosition = _hasParent ? transform.localPosition : transform.position;
-        if (newPosition != _lastPosition) {
-            _lastPosition = newPosition;
-
-            _netClient.UpdateManager.UpdateEntityPosition(
-                Id,
-                new Vector2(newPosition.x, newPosition.y)
-            );
-        }
-
-        const float epsilon = 0.0001f;
-
-        var newScale = _hasParent ? transform.localScale : transform.lossyScale;
-        if (newScale != _lastScale) {
-            var scaleData = new EntityUpdate.ScaleData {
-                origin = true
-            };
-
-            if (newScale.x != _lastScale.x) {
-                scaleData.x = true;
-                scaleData.xScale = newScale.x;
-
-                if (System.Math.Abs(newScale.x - _lastScale.x * -1) < epsilon) {
-                    scaleData.xFlipped = true;
-                }
-            }
-            
-            if (newScale.y != _lastScale.y) {
-                scaleData.y = true;
-                scaleData.yScale = newScale.y;
-
-                if (System.Math.Abs(newScale.y - _lastScale.y * -1) < epsilon) {
-                    scaleData.yFlipped = true;
-                }
-            }
-            
-            if (newScale.z != _lastScale.z) {
-                scaleData.z = true;
-                scaleData.zScale = newScale.z;
-
-                if (System.Math.Abs(newScale.z - _lastScale.z * -1) < epsilon) {
-                    scaleData.zFlipped = true;
-                }
-            }
-
-            _netClient.UpdateManager.UpdateEntityScale(Id, scaleData);
-            
-            _lastScale = newScale;
-        }
-
-        if (_hostScene.isLoaded) PublishPresentation();
-
-        var newActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
-        // Likewise, a room being unloaded switches its objects off on the way out.
-        if (newActive != _lastIsActive && (newActive || _hostScene.isLoaded)) {
-            _lastIsActive = newActive;
-
-            Logger.Info($"Entity '{Object.Host.name}' changed active: {newActive}");
-
-            _netClient.UpdateManager.UpdateEntityIsActive(
-                Id,
-                newActive
-            );
-        }
-
-        for (byte fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
-            var fsm = _fsms.Host[fsmIndex];
-            var snapshot = _fsmSnapshots[fsmIndex];
-
-            var data = new EntityHostFsmData();
-
-            var lastStateName = snapshot.CurrentState;
-            if (fsm.ActiveStateName != lastStateName) {
-                snapshot.CurrentState = fsm.ActiveStateName;
-
-                data.Types.Add(EntityHostFsmData.Type.State);
-                data.CurrentState = (byte) Array.IndexOf(fsm.FsmStates, fsm.Fsm.ActiveState);
-                
-                Logger.Debug($"Entity ({Id}, {Type}) host changed states: {lastStateName}, {fsm.ActiveStateName}");
-            }
-
-            // Define a method that allows generalization of checking for changes in all FSM variables
-            void CondAddData<TVar, TBase, TData>(
-                TVar[] fsmVars,
-                TBase[] snapshotArray,
-                Func<TVar, TBase> fsmVarValue,
-                EntityHostFsmData.Type type,
-                Dictionary<byte, TData> dataDict
-            ) {
-                for (byte i = 0; i < fsmVars.Length; i++) {
-                    var fsmVar = fsmVars[i];
-                    var snapshotVar = snapshotArray[i];
-
-                    if (snapshotVar == null) {
-                        Logger.Warn("No last value found for FSM var");
-                        continue;
-                    }
-
-                    var value = fsmVarValue.Invoke(fsmVar);
-                    if (!value.Equals(snapshotVar)) {
-                        // Update the value in the snapshot since it changed
-                        snapshotArray[i] = value;
-
-                        data.Types.Add(type);
-                        // Some funky casting here to make sure we can use this method with Vector2 and Vector3
-                        // Since there is a mismatch between our Hkmp.Math.Vector2 and Unity's Vector2
-                        // But our types have explicit converters, so casting is possible
-                        if (value is UnityEngine.Vector2 vec2) {
-                            dataDict[i] = (TData) (object) (Vector2) vec2;
-                        } else if (value is Vector3 vec3) {
-                            dataDict[i] = (TData) (object) (Hkmp.Math.Vector3) vec3;
-                        } else {
-                            dataDict[i] = (TData) (object) value;
-                        }
-                    }
-                }
-            }
-
-            CondAddData(
-                fsm.FsmVariables.FloatVariables, 
-                snapshot.Floats,
-                fsmFloat => fsmFloat.Value,
-                EntityHostFsmData.Type.Floats,
-                data.Floats
-            );
-            CondAddData(
-                fsm.FsmVariables.IntVariables, 
-                snapshot.Ints,
-                fsmInt => fsmInt.Value,
-                EntityHostFsmData.Type.Ints,
-                data.Ints
-            );
-            CondAddData(
-                fsm.FsmVariables.BoolVariables, 
-                snapshot.Bools,
-                fsmBool => fsmBool.Value,
-                EntityHostFsmData.Type.Bools,
-                data.Bools
-            );
-            CondAddData(
-                fsm.FsmVariables.StringVariables, 
-                snapshot.Strings,
-                fsmString => fsmString.Value,
-                EntityHostFsmData.Type.Strings,
-                data.Strings
-            );
-            CondAddData(
-                fsm.FsmVariables.Vector2Variables, 
-                snapshot.Vector2s,
-                fsmVec2 => fsmVec2.Value,
-                EntityHostFsmData.Type.Vector2s,
-                data.Vec2s
-            );
-            CondAddData(
-                fsm.FsmVariables.Vector3Variables, 
-                snapshot.Vector3s,
-                fsmVec3 => fsmVec3.Value,
-                EntityHostFsmData.Type.Vector3s,
-                data.Vec3s
-            );
-
-            if (data.Types.Count > 0) {
-                _netClient.UpdateManager.AddEntityHostFsmData(Id, fsmIndex, data);
-            }
+    /// <summary>
+    /// Keeps the original switched off while the replica follows the scene host.
+    /// </summary>
+    private void KeepOriginalOff(bool hostObjectActive) {
+        if (hostObjectActive && !KeepsOriginalRunning) {
+            Logger.Info($"Entity '{Object.Host.name}' host object became active, re-disabling");
+            Object.Host.SetActive(false);
         }
     }
 
@@ -900,61 +634,9 @@ internal class Entity {
         if (self != _animator.Host) {
             return;
         }
-
-        if (_isControlled) {
-            return;
-        }
-
-        if (!_animationClipNameIds.TryGetValue(clip.name, out var animationId)) {
-            Logger.Warn($"Entity '{Object.Client.name}' played unknown animation: {clip.name}");
-            return;
-        }
-
-        Logger.Debug($"Entity '{Object.Host.name}' sends animation: {clip.name}, {animationId}, {clip.wrapMode}");
-        _netClient.UpdateManager.UpdateEntityAnimation(
-            Id,
-            animationId,
-            (byte)clip.wrapMode
-        );
+        _role.OnAnimationPlayed(clip);
     }
     
-    /// <summary>
-    /// Callback method for when a game object is recycled. Used to prevent client objects from being recycled, which
-    /// shouldn't happen because they are instantiated manually instead of from a pool.
-    /// </summary>
-    private void ObjectPoolOnRecycleGameObject(On.ObjectPool.orig_Recycle_GameObject orig, GameObject obj) {
-        if (obj == Object.Client) {
-            Logger.Debug($"Client object of entity: {Id}, {Type} tried to be recycled");
-            return;
-        }
-
-        orig(obj);
-    }
-    
-    /// <summary>
-    /// Callback method for when the 'active' of the host game object is changed. Used to update whether the host
-    /// game object should return to what active state after the scene host is determined.
-    /// </summary>
-    private void OnDoActivateGameObject(ActivateGameObject.orig_DoActivateGameObject orig, HutongGames.PlayMaker.Actions.ActivateGameObject self) {
-        // If the game object in the action is not our host game object, we skip it
-        if (self.Fsm.GetOwnerDefaultTarget(self.gameObject) != Object.Host || Object.Host == null) {
-            orig(self);
-            return;
-        }
-        
-        // If the host client is determined already we skip (although this hook should have been deregistered
-        if (_isSceneHostDetermined) {
-            orig(self);
-            return;
-        }
-        
-        Logger.Debug($"Entity '{Object.Host.name}' tried changing active of host object, while host is not determined yet, updating original active to: {self.activate.Value}");
-
-        // Update the original active value to whatever this action will set
-        // Also, we do not let this action execute any further since we do not want it to modify our host object
-        // before the scene host is determined
-        _originalIsActive = self.activate.Value;
-    }
 
     /// <summary>
     /// Initializes the entity when the client user is the scene host.
@@ -963,7 +645,7 @@ internal class Entity {
         // A room can destroy an original before the scene host is known, such as an encounter that removes
         // itself once seen. There is nothing to activate, and the other entities must still be initialized.
         if (Object.Host == null) {
-            _isControlled = false;
+            SwitchRole(host: true);
             _isSceneHostDetermined = true;
             ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
             Logger.Info($"Entity ({Id}, {Type}) has no original object left; nothing to initialize as host");
@@ -983,7 +665,7 @@ internal class Entity {
 
         _netClient.UpdateManager.UpdateEntityIsActive(Id, _lastIsActive);
 
-        _isControlled = false;
+        SwitchRole(host: true);
         _isSceneHostDetermined = true;
 
         foreach (var component in _components.Values) {
@@ -994,7 +676,6 @@ internal class Entity {
         // Deregister the hook for updating the active value of the host object
         ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
     }
-
     /// <summary>
     /// Initializes the entity when the client user is a scene client. Only sets a variable to indicate the scene
     /// host has been determined.
@@ -1004,752 +685,17 @@ internal class Entity {
         
         // Deregister the hook for updating the active value of the host object
         ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
+
+        SwitchRole(IsHost);
     }
 
     /// <summary>
-    /// Makes the entity a client entity again if the server moved the scene host role away from this player while
-    /// it was stalled. The client copy takes over where the host object was and follows the new host from then on.
+    /// Enters the host role, or the role a client has: the replica once the scene host is known, and waiting
+    /// before that.
     /// </summary>
-    public void MakeClient() {
-        Logger.Info($"Making entity ({Id}, {Type}) a client entity");
-
-        // A later handover must use what the next host shows, not what this client showed.
-        _presentation = null;
-
-        ActivateGameObject.DoActivateGameObject -= OnDoActivateGameObject;
-
-        if (Object.Host != null && Object.Client != null) {
-            var hostActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
-            // If the role returns before the new host moves this entity, the handover must not use an older position
-            _receivedPosition = _hasParent ? Object.Host.transform.localPosition : Object.Host.transform.position;
-            _hasReceivedPosition = true;
-            Object.Client.transform.position = Object.Host.transform.position;
-            Object.Client.transform.localScale = Object.Host.transform.lossyScale;
-            if (!KeepsOriginalRunning) Object.Host.SetActive(false);
-            Object.Client.SetActive(hostActive);
-        } else if (Object.Host != null && !KeepsOriginalRunning) {
-            Object.Host.SetActive(false);
-        }
-
-        _isControlled = true;
-
-        foreach (var component in _components.Values) {
-            component.IsControlled = true;
-        }
+    private void SwitchRole(bool host) {
+        _role = host ? _host : _isSceneHostDetermined ? (Role)_replica : _undetermined;
     }
-
-    /// <summary>
-    /// Makes the entity a host entity if the client user became the scene host.
-    /// </summary>
-    public void MakeHost() {
-        Logger.Info($"Making entity ({Id}, {Type}) a host entity");
-
-        // A projectile or other body spawned during play cannot be resumed: what drives it, such as its flight
-        // and lifetime, ran on the previous host only, so it would hang in place and keep hurting players. It is
-        // ended instead, and reported inactive so nobody entering the room later receives it again. Spawned
-        // enemies, which have health, are taken over like any other.
-        if (SpawnedDuringPlay && Object.Host != null && Object.Host.GetComponent<HealthManager>() == null) {
-            Logger.Info($"  Spawned entity ({Id}, {Type}) ended at the handover");
-            Object.Host.SetActive(false);
-            Object.Client?.SetActive(false);
-            _isControlled = false;
-            foreach (var component in _components.Values) {
-                component.IsControlled = false;
-            }
-
-            _lastIsActive = false;
-            _netClient.UpdateManager.UpdateEntityIsActive(Id, false);
-            return;
-        }
-
-        // If the client object is null, we don't have to care about doing anything for the host object anymore
-        if (Object.Client == null) {
-            if (Object.Host != null) {
-                Object.Host.SetActive(false);
-            }
-            
-            _isControlled = false;
-
-            foreach (var component in _components.Values) {
-                component.IsControlled = false;
-            }
-
-            Logger.Debug("  Client object null, enabling host object and returning");
-            return;
-        }
-
-        // The host object can be destroyed while the client object still exists, for example when a battle
-        // scene destroys its enemies on the previous scene host. There is nothing left to hand over then.
-        if (Object.Host == null) {
-            Object.Client.SetActive(false);
-
-            _isControlled = false;
-
-            foreach (var component in _components.Values) {
-                component.IsControlled = false;
-            }
-
-            Logger.Debug("  Host object null, disabling client object and returning");
-            return;
-        }
-
-        if (_hasParent) {
-            Logger.Debug("  Entity has parent, only setting local transform");
-
-            Object.Host.transform.localPosition = _lastPosition =
-                HandoverPosition.Choose(_hasReceivedPosition, _receivedPosition, _initialPosition);
-            Object.Host.transform.localScale = _lastScale = Object.Client.transform.localScale;
-        } else {
-            Logger.Debug("  Entity has no parent, calculating transform");
-
-            var clientPos = HandoverPosition.Choose(_hasReceivedPosition, _receivedPosition, _initialPosition);
-
-            // Subtracting the parent's position ignores a scaled or rotated parent and moved such enemies far from
-            // where they were, sometimes under the floor; the world position is placed directly instead.
-            Object.Host.transform.position = clientPos;
-            _lastPosition = Object.Host.transform.position;
-            
-            // Since the scale of the client object is the entire scale we have and the host object scale can be in a
-            // hierarchy, we need to calculate what the new local scale of the host will be to match the client scale
-            var clientScale = Object.Client.transform.localScale;
-            var hostLocalScale = Object.Host.transform.localScale;
-            var hostLossyScale = Object.Host.transform.lossyScale;
-            
-            var newScaleX = hostLocalScale.x == 0 || hostLossyScale.x == 0
-                ? 0f
-                : clientScale.x / (hostLossyScale.x / hostLocalScale.x);
-            var newScaleY = hostLocalScale.y == 0 || hostLossyScale.y == 0
-                ? 0f
-                : clientScale.y / (hostLossyScale.y / hostLocalScale.y);
-            var newScaleZ = hostLocalScale.z == 0 || hostLossyScale.z == 0
-                ? 0f
-                : clientScale.z / (hostLossyScale.z / hostLocalScale.z);
-        
-            Object.Host.transform.localScale = _lastScale = new Vector3(newScaleX, newScaleY, newScaleZ);
-        }
-
-        // Make sure that the sprite animator doesn't play the default clip after enabling the object
-        if (_animator.Host != null) {
-            _animator.Host.playAutomatically = false;
-        }
-
-        var clientHealth = Object.Client.GetComponent<HealthManager>();
-        var clientActive = HandoverActivity.OriginalActive(KeepsOriginalRunning, Object.Host.activeSelf,
-            _presentation?.Shown, _presentation?.Alive, Object.Client.activeSelf,
-            clientHealth != null && clientHealth.GetIsDead());
-        Object.Client.SetActive(false);
-        Object.Host.SetActive(clientActive);
-
-        Logger.Debug($"  Set Active of host object to: {clientActive}, disabling client object");
-
-        // We need to set the isKinematic property of rigid bodies to ensure physics work again after enabling
-        // the host object. In Hornet 1 this is necessary because another state sets this property normally in the
-        // fight. See the "Wake" or "Refight Ready" state of the "Control" FSM on Hornet 1.
-        // For the Mantis Lord and the city and station lifts, this should never be disabled, since they are always kinematic.
-        if (_presentation != null) {
-            var collider = Object.Host.GetComponent<Collider2D>();
-            if (collider != null) collider.enabled = _presentation.Collider;
-            var renderer = Object.Host.GetComponent<MeshRenderer>();
-            if (renderer != null) renderer.enabled = _presentation.Renderer;
-            Logger.Info($"  Entity ({Id}, {Type}) rebuilt from the previous host: {_presentation}");
-        } else {
-            HandoverSpawnState.Apply(Object.Host, Object.Client, $"({Id}, {Type})");
-        }
-
-        var rigidBody = Object.Host.GetComponent<Rigidbody2D>();
-        if (rigidBody != null) {
-            var hostCollider = Object.Host.GetComponent<Collider2D>();
-            var makeDynamic = Type != EntityType.MantisLord && Type != EntityType.CityElevator
-                && Type != EntityType.StationLift
-                // A climber rounds corners only as a kinematic body; with physics on it wedges against the first one.
-                && Object.Host.GetComponent<Climber>() == null
-                // A body whose collider is off while it waits, such as the Broken Vessel during its first encounter,
-                // has nothing to stand on: dynamic physics would drop it through the floor of the room.
-                && (hostCollider == null || hostCollider.enabled);
-
-            var kinematic = _components.TryGetValue(EntityComponentType.Kinematic, out var component)
-                ? component as KinematicComponent
-                : null;
-            var reported = kinematic?.Received;
-            rigidBody.isKinematic = HandoverBody.Kinematic(reported, rigidBody.isKinematic, makeDynamic);
-            // The previous host's gravity, not what this original last had when it ran an earlier part of the fight.
-            if (_presentation != null && _presentation.HasBody) rigidBody.gravityScale = _presentation.Gravity;
-            kinematic?.TakenOver();
-            Logger.Info($"  Body of entity ({Id}, {Type}) kinematic: {rigidBody.isKinematic}, as reported: {reported?.ToString() ?? "none"}");
-        }
-
-        _lastIsActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
-
-        // From now on this client sends positions; a later handover must wait for the next host's own.
-        _hasReceivedPosition = false;
-        
-        _isControlled = false;
-
-        foreach (var component in _components.Values) {
-            component.IsControlled = false;
-        }
-
-        if (_animator.Client != null) {
-            var currentClip = _animator.Client.CurrentClip;
-            if (currentClip != null) {
-                var clientAnimation = currentClip.name;
-                var wrapMode = currentClip.wrapMode;
-            
-                Logger.Debug($"  Animator and current clip present, updating animation: {clientAnimation}, {wrapMode}");
-            
-                LateUpdateAnimation(_animator.Host, clientAnimation, wrapMode);   
-            }
-        }
-
-        Logger.Debug("  Restoring FSMs from snapshots");
-
-        var initialize = HandoverInitialization.ShouldInitialize(_originalInitialized);
-        Logger.Info($"  Entity ({Id}, {Type}) {(initialize ? "initializes its machines for the first time" : "keeps the setup of its machines")}");
-
-        for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
-            var fsm = _fsms.Host[fsmIndex];
-
-            Logger.Debug($"    Restoring FSM: {fsm.Fsm.Name}");
-
-            // An original that never ran is initialized here once; repeating it would undo one-time setup, such as a
-            // child the first initialization detached from the body and kept a reference to.
-            if (initialize) {
-                EntityInitializer.InitializeFsm(fsm);
-            } else {
-                EntityInitializer.CheckPreProcessFsm(fsm);
-            }
-            
-            var snapshot = _fsmSnapshots[fsmIndex];
-
-            for (var i = 0; i < snapshot.Floats.Length; i++) {
-                fsm.FsmVariables.FloatVariables[i].Value = snapshot.Floats[i];
-            }
-            for (var i = 0; i < snapshot.Ints.Length; i++) {
-                fsm.FsmVariables.IntVariables[i].Value = snapshot.Ints[i];
-            }
-            for (var i = 0; i < snapshot.Bools.Length; i++) {
-                fsm.FsmVariables.BoolVariables[i].Value = snapshot.Bools[i];
-            }
-            for (var i = 0; i < snapshot.Strings.Length; i++) {
-                fsm.FsmVariables.StringVariables[i].Value = snapshot.Strings[i];
-            }
-            for (var i = 0; i < snapshot.Vector2s.Length; i++) {
-                fsm.FsmVariables.Vector2Variables[i].Value = snapshot.Vector2s[i];
-            }
-            for (var i = 0; i < snapshot.Vector3s.Length; i++) {
-                fsm.FsmVariables.Vector3Variables[i].Value = snapshot.Vector3s[i];
-            }
-
-            HandoverFsmReferences.Fill(fsm, $"({Id}, {Type})");
-
-            // The machine enters its state again from the start, running every action except the ones that must not
-            // happen twice, such as creating a projectile the previous host already created. A state that chooses its
-            // way out chooses again, and the state's own effects, such as its animation, are made again.
-            var stateName = ReentryRegistry.StateToEnter(Type, fsm.Fsm.Name, snapshot.CurrentState);
-            var state = fsm.GetState(stateName);
-            if (state == null) {
-                Logger.Debug("  Not setting FSM state, because current state is empty");
-                continue;
-            }
-
-            var allActions = state.Actions;
-            var runActions = ReentryRegistry.ActionsToRun(allActions);
-            Logger.Info($"  Entity ({Id}, {Type}) enters '{fsm.Fsm.Name}' again in '{stateName}'" +
-                        (stateName != snapshot.CurrentState ? $" (anchor of '{snapshot.CurrentState}')" : "") +
-                        $", running {runActions.Length} of {allActions.Length} actions; left out: " +
-                        string.Join(", ", allActions.Except(runActions).Select(a => a.GetType().Name)));
-
-            state.Actions = runActions;
-            fsm.SetState(stateName);
-            state.Actions = allActions;
-
-            // The clip the previous host last showed outranks the resumed state's own.
-            if (fsmIndex == 0 && _presentation != null && _presentation.Clip.Length > 0 && _animator.Host != null) {
-                var clip = _animator.Host.GetClipByName(_presentation.Clip);
-                if (clip != null) _animator.Host.Play(clip);
-            }
-        }
-
-        _originalInitialized = true;
-
-        // Restoring an FSM state does not replay one-shot activation actions from earlier states.
-        // Preserve hitboxes such as Gruz Mother's Hero Damager before the new host simulates a frame.
-        EntityChildState.Restore(Object.Host, Object.Client);
-
-        // Initialising and resuming the machines can run actions that place the body, such as a spawn that moves
-        // the enemy to where it hides before entering, so the position chosen above is placed once more.
-        if (_hasParent) {
-            Object.Host.transform.localPosition = _lastPosition;
-        } else {
-            Object.Host.transform.position = _lastPosition;
-        }
-
-        if (_components.TryGetValue(EntityComponentType.Health, out var health)) {
-            ((HealthManagerComponent)health).RestoreHealth();
-        }
-    }
-
-    /// <summary>
-    /// Updates the position of the client entity.
-    /// </summary>
-    /// <param name="position">The new position.</param>
-    public void UpdatePosition(Vector2 position) {
-        if (Object.Client == null || Object.Host == null) {
-            Logger.Warn($"Cannot update position for entity ({Id}, {Type}), client or host object is null");
-            return;
-        }
-        
-        var unityPos = new Vector3(
-            position.X, 
-            position.Y,
-            _hasParent ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
-        );
-
-        _receivedPosition = unityPos;
-        _hasReceivedPosition = true;
-
-        var positionInterpolation = Object.Client.GetComponent<PositionInterpolation>();
-        if (positionInterpolation == null) {
-            return;
-        }
-
-        positionInterpolation.SetNewPosition(unityPos);
-    }
-
-    /// <summary>
-    /// Updates the scale of the client entity.
-    /// </summary>
-    /// <param name="scale">The new scale data.</param>
-    public void UpdateScale(EntityUpdate.ScaleData scale) {
-        if (Object.Client == null) {
-            Logger.Warn($"Cannot update scale for entity ({Id}, {Type}), client object is null");
-            return;
-        }
-        
-        var transform = Object.Client.transform;
-        var localScale = transform.localScale;
-        
-        if (scale.x) {
-            if (scale.xFlipped) {
-                var currentScaleX = localScale.x;
-
-                if (currentScaleX > 0 != scale.xPos) {
-                    currentScaleX *= -1;
-
-                    localScale.x = currentScaleX;
-                }
-            } else {
-                localScale.x = scale.xScale;
-            }
-        }
-        
-        if (scale.y) {
-            if (scale.yFlipped) {
-                var currentScaleY = localScale.y;
-
-                if (currentScaleY > 0 != scale.yPos) {
-                    currentScaleY *= -1;
-
-                    localScale.y = currentScaleY;
-                }
-            } else {
-                localScale.y = scale.yScale;
-            }
-        }
-
-        if (scale.z) {
-            if (scale.zFlipped) {
-                var currentScaleZ = localScale.z;
-
-                if (currentScaleZ > 0 != scale.zPos) {
-                    currentScaleZ *= -1;
-
-                    localScale.z = currentScaleZ;
-                }
-            } else {
-                localScale.z = scale.zScale;
-            }
-        }
-
-        transform.localScale = localScale;
-    }
-
-    /// <summary>
-    /// Updates the animation of the client entity.
-    /// </summary>
-    /// <param name="animationId">The ID of the animation.</param>
-    /// <param name="wrapMode">The wrap mode of the animation clip.</param>
-    /// <param name="alreadyInSceneUpdate">Whether this update is when entering a new scene.</param>
-    public void UpdateAnimation(
-        byte animationId, 
-        tk2dSpriteAnimationClip.WrapMode wrapMode, 
-        bool alreadyInSceneUpdate
-    ) {
-        if (_animator.Client == null) {
-            Logger.Warn($"Entity '{Object.Client.name}' received animation while client animator does not exist");
-            return;
-        }
-
-        if (!_animationClipNameIds.TryGetValue(animationId, out var clipName)) {
-            Logger.Warn($"Entity '{Object.Client.name}' received unknown animation ID: {animationId}");
-            return;
-        }
-
-        Logger.Debug($"Entity '{Object.Client.name}' received animation: {animationId}, {clipName}, {wrapMode}");
-
-        // All paths lead to calling the Play method of the sprite animator that is hooked, so we allow the call
-        // through the hook
-        _allowClientAnimation = true;
-
-        if (alreadyInSceneUpdate) {
-            // Since this is an animation update from an entity that was already present in a scene,
-            // we need to determine where to start playing this specific animation
-            LateUpdateAnimation(_animator.Client, clipName, wrapMode);
-        }
-
-        // Otherwise, default to just playing the clip
-        _animator.Client.Play(clipName);
-    }
-
-    /// <summary>
-    /// Update the animation for the given animator with the given clip name and wrap mode. This assumes that we need
-    /// to replicate animation behaviour for a late update.
-    /// </summary>
-    /// <param name="animator">The sprite animator to update.</param>
-    /// <param name="clipName">The name of the animation clip.</param>
-    /// <param name="wrapMode">The wrap mode for the animation.</param>
-    private void LateUpdateAnimation(
-        tk2dSpriteAnimator animator, 
-        string clipName, 
-        tk2dSpriteAnimationClip.WrapMode wrapMode
-    ) {
-        if (wrapMode == tk2dSpriteAnimationClip.WrapMode.Loop) {
-            animator.Play(clipName);
-            return;
-        }
-
-        var clip = animator.GetClipByName(clipName);
-        
-        Logger.Debug($"Entity ({Id}, {Type}) LateUpdateAnimation: {clip.name}, {wrapMode}");
-
-        if (wrapMode == tk2dSpriteAnimationClip.WrapMode.LoopSection) {
-            // The clip loops in a specific section in the frames, so we start playing
-            // it from the start of that section
-            animator.PlayFromFrame(clipName, clip.loopStart);
-            return;
-        }
-
-        if (wrapMode == tk2dSpriteAnimationClip.WrapMode.Once ||
-            wrapMode == tk2dSpriteAnimationClip.WrapMode.Single) {
-            // Since the clip was played once, it stops on the last frame,
-            // so we emulate that by only "playing" the last frame of the clip
-            var clipLength = clip.frames.Length;
-            animator.PlayFromFrame(clipName, clipLength - 1);
-
-            // Logger.Info(
-            // $"  Played animation: {clipName}, {clipLength - 1} on {_animator.Client.name}, {_animator.Client.GetHashCode()}");
-        }
-    }
-
-    /// <summary>
-    /// Updates whether the game object for the client entity is active.
-    /// </summary>
-    /// <param name="active">The new value for active.</param>
-    /// <summary>
-    /// Switches on the parents that keep this entity's original hidden after it was taken over.
-    /// </summary>
-    public void ShowParents() {
-        // An enemy the previous host still had inside its carrier stays there, to be released as in normal play.
-        if (_presentation != null && _presentation.Carried) {
-            _shownAtHandover = false;
-            return;
-        }
-        if (Object.Host != null && !_isControlled) HandoverSpawnState.ShowParents(Object.Host, $"({Id}, {Type})");
-        _shownAtHandover = Object.Host != null && !_isControlled && Object.Host.activeInHierarchy;
-    }
-
-    /// <summary>
-    /// Shows this entity again if its room hid it after the handover while it is still alive.
-    /// </summary>
-    /// <remarks>
-    /// An arena resumed mid-fight can replay a state that switches its wave groups off, hiding enemies that were
-    /// fighting. Only an enemy shown at the handover and not dead is brought back.
-    /// </remarks>
-    public void KeepShown() {
-        if (!_shownAtHandover || _isControlled || Object.Host == null) return;
-        var health = Object.Host.GetComponent<HealthManager>();
-        if (health != null && health.GetIsDead()) {
-            _shownAtHandover = false;
-            return;
-        }
-
-        HandoverSpawnState.ShowParents(Object.Host, $"({Id}, {Type})");
-    }
-
-    /// <summary>
-    /// Stops keeping this entity shown, once the room has settled after a handover.
-    /// </summary>
-    public void SettleAfterHandover() => _shownAtHandover = false;
-
-    /// <summary>
-    /// How often the scene host sends the whole presentation again even without a change, so a lost message is
-    /// corrected by the next one.
-    /// </summary>
-    private const float PresentationRefreshSeconds = 2f;
-
-    /// <summary>The presentation this client last sent as scene host.</summary>
-    private PresentationState _publishedPresentation;
-
-    private float _publishedPresentationAt;
-
-    /// <summary>The presentation the scene host last sent, or null before the first one arrives.</summary>
-    private PresentationState _presentation;
-
-    /// <summary>
-    /// Sends how the original appears whenever that changes and again at intervals.
-    /// </summary>
-    private void PublishPresentation() {
-        var state = PresentationState.Of(Object.Host, IsCarried(Object.Host));
-        var due = Time.unscaledTime - _publishedPresentationAt > PresentationRefreshSeconds;
-        if (!due && state.SameAs(_publishedPresentation)) return;
-        _publishedPresentation = state;
-        _publishedPresentationAt = Time.unscaledTime;
-        var data = new EntityNetworkData { Type = EntityComponentType.Presentation };
-        state.Write(data.Packet);
-        _netClient.UpdateManager.AddEntityData(Id, data);
-    }
-
-    /// <summary>
-    /// Whether another entity still holds the given body, such as a summon that has not released its enemy yet.
-    /// An arena controller holds every enemy of its arena and does not count.
-    /// </summary>
-    private static bool IsCarried(GameObject body) {
-        for (var parent = body.transform.parent; parent != null; parent = parent.parent) {
-            if (EntityRegistry.TryGetEntry(parent.gameObject, out var entry) && entry.Type != EntityType.BattleScene) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Draws the replica the way the scene host shows the entity: visible only when the host shows it alive and
-    /// released, with the same body and animation.
-    /// </summary>
-    private void ApplyPresentation(PresentationState state) {
-        _presentation = state;
-        if (!_isControlled || Object.Client == null) return;
-
-        Object.Client.SetActive(state.Visible);
-        var collider = Object.Client.GetComponent<Collider2D>();
-        if (collider != null) collider.enabled = state.Collider;
-        var renderer = Object.Client.GetComponent<MeshRenderer>();
-        if (renderer != null) renderer.enabled = state.Renderer;
-
-        var animator = _animator.Client;
-        if (state.Visible && animator != null && state.Clip.Length > 0
-            && (animator.CurrentClip == null || animator.CurrentClip.name != state.Clip)) {
-            var clip = animator.GetClipByName(state.Clip);
-            if (clip != null) {
-                _allowClientAnimation = true;
-                animator.Play(clip);
-                _allowClientAnimation = false;
-            }
-        }
-    }
-
-    public void UpdateIsActive(bool active) {
-        // The presentation is the whole truth; an activity report must not show what the host hides.
-        if (active && _presentation != null && !_presentation.Visible) active = false;
-        if (Object.Client != null) {
-            Logger.Debug($"Entity '{Object.Client.name}' received active: {active}");
-            Object.Client.SetActive(active);
-        } else {
-            Logger.Warn($"Entity ({Id}, {Type}) could not update active, because client object is null");
-        }
-    }
-
-    /// <summary>
-    /// Updates generic data for the client entity.
-    /// </summary>
-    /// <param name="entityNetworkData">A list of data to update the client entity with.</param>
-    /// <param name="alreadyInSceneUpdate">Whether this data is from an already in scene update.</param>
-    public void UpdateData(List<EntityNetworkData> entityNetworkData, bool alreadyInSceneUpdate) {
-        foreach (var data in entityNetworkData) {
-            if (data.Type == EntityComponentType.Presentation) {
-                ApplyPresentation(PresentationState.Read(data.Packet));
-                continue;
-            }
-
-            if (data.Type == EntityComponentType.Fsm) {
-                PlayMakerFSM fsm;
-                byte stateIndex;
-                byte actionIndex;
-
-                // A controller kept without a replica, such as an arena, has no client machines to replay on.
-                if (_fsms.Client.Count == 0) {
-                    continue;
-                }
-
-                if (_fsms.Client.Count > 1) {
-                    // Do a check on the length of the data
-                    if (data.Packet.Length < 3) {
-                        continue;
-                    }
-
-                    var fsmIndex = data.Packet.ReadByte();
-                    fsm = _fsms.Client[fsmIndex];
-
-                    stateIndex = data.Packet.ReadByte();
-                    actionIndex = data.Packet.ReadByte();
-                } else {
-                    // Do a check on the length of the data
-                    if (data.Packet.Length < 2) {
-                        continue;
-                    }
-
-                    fsm = _fsms.Client[0];
-
-                    stateIndex = data.Packet.ReadByte();
-                    actionIndex = data.Packet.ReadByte();
-                }
-
-                var state = fsm.FsmStates[stateIndex];
-                var action = state.Actions[actionIndex];
-                
-                Logger.Info($"Received entity network data for FSM: {fsm.Fsm.Name}, {state.Name}, {actionIndex} ({action.GetType()})");
-
-                EntityFsmActions.ApplyNetworkDataFromAction(data, action);
-
-                continue;
-            }
-
-            if (_components.TryGetValue(data.Type, out var component)) {
-                component.Update(data, alreadyInSceneUpdate);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Update the FSMs of the host entity to prepare for host transfer or disconnects.
-    /// </summary>
-    /// <param name="hostFsmData">Dictionary mapping FSM index to data.</param>
-    public void UpdateHostFsmData(Dictionary<byte, EntityHostFsmData> hostFsmData) {
-        foreach (var fsmPair in hostFsmData) {
-            var fsmIndex = fsmPair.Key;
-            var data = fsmPair.Value;
-
-            if (_fsms.Host.Count <= fsmIndex) {
-                Logger.Warn($"Tried to update host FSM data for unknown FSM index: {fsmIndex}");
-                continue;
-            }
-
-            var hostFsm = _fsms.Host[fsmIndex];
-            var snapshot = _fsmSnapshots[fsmIndex];
-
-            if (data.Types.Contains(EntityHostFsmData.Type.State)) {
-                var states = hostFsm.FsmStates;
-                if (states.Length <= data.CurrentState) {
-                    Logger.Warn($"Tried to update host FSM state for unknown state index: {data.CurrentState}");
-                } else {
-                    var stateName = states[data.CurrentState].Name;
-                    
-                    snapshot.CurrentState = stateName;
-                    
-                    // Also propagate this state change to the EntityFsmActions class with the client FSM for the
-                    // same index
-                    if (_fsms.Client.Count > fsmIndex) {
-                        EntityFsmActions.RegisterStateChange(_fsms.Client[fsmIndex].Fsm, stateName);
-                    }
-                }
-            }
-
-            var fsms = _fsms.Client.Count > fsmIndex
-                ? new[] { hostFsm, _fsms.Client[fsmIndex] }
-                : new[] { hostFsm };
-
-            void CondUpdateVars<TFsm, TBase>(
-                EntityHostFsmData.Type type,
-                Dictionary<byte, TBase> dataDict,
-                TFsm[] fsmVarArray,
-                Action<byte, TFsm, TBase> setValueAction
-            ) {
-                if (data.Types.Contains(type)) {
-                    foreach (var pair in dataDict) {
-                        if (fsmVarArray.Length <= pair.Key) {
-                            Logger.Warn($"Tried to update host FSM var ({typeof(TBase)}) for unknown index: {pair.Key}");
-                        } else {
-                            setValueAction.Invoke(pair.Key, fsmVarArray[pair.Key], pair.Value);
-                        }
-                    }
-                }
-            }
-
-            // A controller that keeps running on every player must not have its own values overwritten; the host's
-            // values are only kept in the snapshot for a handover, through a scratch copy of its variables.
-            var variableSets = fsms.Select(machine => KeepsOriginalRunning && machine == hostFsm
-                ? new FsmVariables(machine.FsmVariables)
-                : machine.FsmVariables);
-            foreach (var variables in variableSets) {
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Floats,
-                    data.Floats,
-                    variables.FloatVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Floats[index] = value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Ints,
-                    data.Ints,
-                    variables.IntVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Ints[index] = value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Bools,
-                    data.Bools,
-                    variables.BoolVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Bools[index] = value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Strings,
-                    data.Strings,
-                    variables.StringVariables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = value;
-                        snapshot.Strings[index] = value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Vector2s,
-                    data.Vec2s,
-                    variables.Vector2Variables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = (UnityEngine.Vector2) value;
-                        snapshot.Vector2s[index] = (UnityEngine.Vector2) value;
-                    }
-                );
-                CondUpdateVars(
-                    EntityHostFsmData.Type.Vector3s,
-                    data.Vec3s,
-                    variables.Vector3Variables,
-                    (index, fsmVar, value) => {
-                        fsmVar.Value = (Vector3) value;
-                        snapshot.Vector3s[index] = (Vector3) value;
-                    }
-                );
-            }
-        }
-    }
-
     /// <summary>
     /// Destroys the entity.
     /// </summary>
