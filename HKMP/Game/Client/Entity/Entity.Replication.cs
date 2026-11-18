@@ -34,7 +34,7 @@ internal partial class Entity {
         var unityPos = new Vector3(
             position.X, 
             position.Y,
-            _hasParent ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
+            UsesParentSpace ? Object.Host.transform.localPosition.z : Object.Host.transform.position.z
         );
 
         _receivedPosition = unityPos;
@@ -190,6 +190,9 @@ internal partial class Entity {
     private void ApplyBodyState(BodyState state) {
         _bodyState = state;
         if (IsHost || Object.Client == null) return;
+
+        _detached = state.Detached;
+        MatchHierarchy(Object.Client, _declaredReplicaParent, _detached);
 
         Object.Client.SetActive(state.Visible);
         var collider = Object.Client.GetComponent<Collider2D>();

@@ -44,8 +44,10 @@ internal partial class Entity {
         if (Object.Host != null && Object.Client != null) {
             var hostActive = _hasParent ? Object.Host.activeSelf : Object.Host.activeInHierarchy;
             // If the role returns before the new host moves this entity, the handover must not use an older position
-            _receivedPosition = _hasParent ? Object.Host.transform.localPosition : Object.Host.transform.position;
+            _detached = OriginalIsDetached();
+            _receivedPosition = UsesParentSpace ? Object.Host.transform.localPosition : Object.Host.transform.position;
             _hasReceivedPosition = true;
+            MatchHierarchy(Object.Client, _declaredReplicaParent, _detached);
             Object.Client.transform.position = Object.Host.transform.position;
             Object.Client.transform.localScale = Object.Host.transform.lossyScale;
             if (!KeepsOriginalRunning) Object.Host.SetActive(false);
@@ -173,7 +175,12 @@ internal partial class Entity {
     /// Places the original where the previous scene host last showed the entity, at the same scale.
     /// </summary>
     private void PlaceBody() {
-        if (_hasParent) {
+        // A child the game took out of its parent on the previous host is taken out here too, before it is placed,
+        // or it would be placed relative to the parent and follow it.
+        _detached = _bodyState != null && _bodyState.Detached;
+        MatchHierarchy(Object.Host, _declaredParent, _detached);
+
+        if (UsesParentSpace) {
             Logger.Debug("  Entity has parent, only setting local transform");
 
             Object.Host.transform.localPosition = _lastPosition =
@@ -213,7 +220,7 @@ internal partial class Entity {
     /// Switches the original on or off as the previous scene host showed it, and the replica off.
     /// </summary>
     private void RestoreActivity() {
-        _handoverBodyState = _bodyState ?? BodyState.Of(Object.Client, carried: false);
+        _handoverBodyState = _bodyState ?? BodyState.Of(Object.Client, carried: false, detached: _detached);
         if (_bodyState == null) {
             Logger.Info($"  Entity ({Id}, {Type}) has no body state from the previous host; the replica's body stands in");
         }
@@ -394,7 +401,7 @@ internal partial class Entity {
 
         // Initialising and resuming the machines can run actions that place the body, such as a spawn that moves
         // the enemy to where it hides before entering, so the position chosen above is placed once more.
-        if (_hasParent) {
+        if (UsesParentSpace) {
             Object.Host.transform.localPosition = _lastPosition;
         } else {
             Object.Host.transform.position = _lastPosition;

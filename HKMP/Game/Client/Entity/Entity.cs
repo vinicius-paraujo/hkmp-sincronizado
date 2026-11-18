@@ -212,6 +212,11 @@ internal partial class Entity {
             ? Object.Host.transform.localScale 
             : Object.Host.transform.lossyScale;
 
+        RememberDeclaredParents();
+
+        RegisteredEntities.Add(Object.Host);
+        RegisteredEntities.Add(Object.Client);
+
         _hostScene = Object.Host.scene;
 
         // The room's own placement of the original object, before any physics can move it on this client.
@@ -701,6 +706,8 @@ internal partial class Entity {
     /// </summary>
     public void Destroy() {
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
+        RegisteredEntities.Remove(Object.Host);
+        RegisteredEntities.Remove(Object.Client);
         On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float -= OnAnimationPlayed;
         On.ObjectPool.Recycle_GameObject -= ObjectPoolOnRecycleGameObject;
 

@@ -339,6 +339,26 @@
         "fsm_name": "Control",
         "components": [
             "GravityScale", "Rotation", "Music"
+        ],
+        "children": [
+            {
+                "base_object_name": "Needle",
+                "type": "HornetNeedle",
+                "fsm_name": "Control",
+                "components": [
+                    "Velocity", "Rotation"
+                ],
+                "children": [
+                    {
+                        "base_object_name": "Needle Tink",
+                        "type": "HornetNeedleTink",
+                        "fsm_name": "Setup and Follow",
+                        "components": [
+                            "Rotation"
+                        ]
+                    }
+                ]
+            }
         ]
     },
     {

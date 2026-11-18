@@ -37,6 +37,20 @@ namespace Sincroniza.Barrier.Tests {
         }
 
         [Fact]
+        public void A_child_registered_as_an_entity_of_its_own_is_not_an_own_child() {
+            var scene = new Scene("Fungus1_04_boss"); var hornet = new GameObject("Hornet Boss 1", scene);
+            var needle = hornet.Child("Needle", false); hornet.Child("Hitbox", true);
+            RegisteredEntities.Add(needle);
+            try {
+                Assert.Equal(new[] { true }, BodyChildren.Read(hornet).ConvertAll(node => node.Active));
+                Assert.Equal(0, BodyChildren.Apply(hornet, new System.Collections.Generic.List<BodyChildren.Node>()));
+                Assert.False(needle.activeSelf);
+            } finally {
+                RegisteredEntities.Remove(needle);
+            }
+        }
+
+        [Fact]
         public void Nested_children_and_duplicate_names_keep_each_individual_state() {
             var scene = new Scene("Room");
             var host = new GameObject("Host", scene); var original = new GameObject("Original", scene);

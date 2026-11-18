@@ -29,7 +29,8 @@ internal partial class Entity {
     private void PublishFrame() {
         var transform = Object.Host.transform;
 
-        var newPosition = _hasParent ? transform.localPosition : transform.position;
+        _detached = OriginalIsDetached();
+        var newPosition = UsesParentSpace ? transform.localPosition : transform.position;
         if (newPosition != _lastPosition) {
             _lastPosition = newPosition;
 
@@ -261,7 +262,7 @@ internal partial class Entity {
     /// Sends how the original appears whenever that changes and again at intervals.
     /// </summary>
     private void PublishBodyState() {
-        var state = BodyState.Of(Object.Host, IsCarried(Object.Host));
+        var state = BodyState.Of(Object.Host, IsCarried(Object.Host), _detached);
         var due = Time.unscaledTime - _publishedBodyStateAt > BodyStateRefreshSeconds;
         if (!due && state.SameAs(_publishedBodyState)) return;
         _publishedBodyState = state;
@@ -273,13 +274,25 @@ internal partial class Entity {
 
     /// <summary>
     /// Whether another entity still holds the given body, such as a summon that has not released its enemy yet.
-    /// An arena controller holds every enemy of its arena and does not count.
+    /// An arena controller holds every enemy of its arena and does not count, and neither does the entity this one is
+    /// declared a child of, such as Hornet for her needle: the needle is part of her, not held until released.
     /// </summary>
-    private static bool IsCarried(GameObject body) {
-        for (var parent = body.transform.parent; parent != null; parent = parent.parent) {
-            if (EntityRegistry.TryGetEntry(parent.gameObject, out var entry) && entry.Type != EntityType.BattleScene) {
-                return true;
+    private bool IsCarried(GameObject body) {
+        var parent = body.transform.parent;
+        if (_hasParent && parent != null) {
+            parent = parent.parent;
+        }
+
+        for (; parent != null; parent = parent.parent) {
+            if (!RegisteredEntities.IsEntity(parent.gameObject)) {
+                continue;
             }
+
+            if (EntityRegistry.TryGetEntry(parent.gameObject, out var entry) && entry.Type == EntityType.BattleScene) {
+                continue;
+            }
+
+            return true;
         }
 
         return false;

@@ -244,5 +244,10 @@ internal enum EntityType {
     // Two-stop lifts that move when the knight steps on them: the stagway and Crystal Peak lifts.
     StationLift,
     // The controller of an arena, which counts its waves and starts each one. It has no replica.
-    BattleScene
+    BattleScene,
+    // The needle Hornet throws and pulls back. It tells her when it is back, so it changes hands with her.
+    HornetNeedle,
+    // What the nail strikes on Hornet's needle. Its machine detaches it and the needle once, when the needle is first
+    // switched on, and then follows the needle; as an entity it is resumed following instead of detaching again.
+    HornetNeedleTink
 }

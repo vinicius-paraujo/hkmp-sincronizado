@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Hkmp.Networking.Packet;
 using UnityEngine;
 using Logger = Hkmp.Logging.Logger;
@@ -21,7 +21,7 @@ internal sealed class BodyState {
     private const byte ShownFlag = 1, AliveFlag = 2, CarriedFlag = 4, ColliderFlag = 8, RendererFlag = 16,
         BodyFlag = 32, KinematicFlag = 64, InvincibleFlag = 128;
 
-    private const byte DamageFlag = 1;
+    private const byte DamageFlag = 1, DetachedFlag = 2;
 
     public bool Shown { get; private set; }
     public bool Alive { get; private set; }
@@ -60,13 +60,20 @@ internal sealed class BodyState {
     /// </summary>
     public List<BodyChildren.Node> Children { get; private set; } = new List<BodyChildren.Node>();
 
+    /// <summary>
+    /// Whether the game took a child entity out of the entity it is declared a child of, as Hornet's needle is taken
+    /// out of her when thrown. Its position is then sent in the room's space instead of relative to that parent.
+    /// </summary>
+    public bool Detached { get; private set; }
+
     /// <summary>Whether a replica drawn from this state should be visible.</summary>
     public bool Visible => Shown && Alive && !Carried;
 
     /// <summary>Reads the state of a body: the original on the scene host, or the replica when nothing arrived.</summary>
     /// <param name="body">The object to read.</param>
     /// <param name="carried">Whether another entity still holds it, such as a summon before releasing it.</param>
-    public static BodyState Of(GameObject body, bool carried) {
+    /// <param name="detached">Whether it is a child entity the game took out of its parent.</param>
+    public static BodyState Of(GameObject body, bool carried, bool detached) {
         var health = body.GetComponent<HealthManager>();
         var collider = body.GetComponent<Collider2D>();
         var renderer = body.GetComponent<MeshRenderer>();
@@ -81,6 +88,7 @@ internal sealed class BodyState {
             Alive = health == null || !health.GetIsDead(),
             Invincible = health != null && health.IsInvincible,
             Carried = carried,
+            Detached = detached,
             Collider = collider == null || collider.enabled,
             Renderer = renderer == null || renderer.enabled,
             Clip = animator != null && animator.CurrentClip != null ? animator.CurrentClip.name : "",
@@ -142,7 +150,10 @@ internal sealed class BodyState {
         if (Kinematic) flags |= KinematicFlag;
         if (Invincible) flags |= InvincibleFlag;
         packet.Write(flags);
-        packet.Write(HasDamage ? DamageFlag : (byte)0);
+        byte more = 0;
+        if (HasDamage) more |= DamageFlag;
+        if (Detached) more |= DetachedFlag;
+        packet.Write(more);
         packet.Write(Clip);
         if (HasBody) packet.Write(Gravity);
         if (HasDamage) packet.Write(Damage);
@@ -163,6 +174,7 @@ internal sealed class BodyState {
             Kinematic = (flags & KinematicFlag) != 0,
             Invincible = (flags & InvincibleFlag) != 0,
             HasDamage = (more & DamageFlag) != 0,
+            Detached = (more & DetachedFlag) != 0,
             Clip = packet.ReadString(),
         };
         if (state.HasBody) state.Gravity = packet.ReadFloat();
@@ -201,6 +213,7 @@ internal sealed class BodyState {
             || other.Collider != Collider || other.Renderer != Renderer || other.Clip != Clip
             || other.HasBody != HasBody || other.Gravity != Gravity || other.Kinematic != Kinematic
             || other.Invincible != Invincible || other.HasDamage != HasDamage || other.Damage != Damage
+            || other.Detached != Detached
             || !BodyChildren.Same(other.Children, Children)) {
             return false;
         }
@@ -211,6 +224,6 @@ internal sealed class BodyState {
     public override string ToString() =>
         $"shown {Shown}, alive {Alive}, carried {Carried}, collider {Collider}, renderer {Renderer}, clip '{Clip}'" +
         (HasBody ? $", gravity {Gravity}, kinematic {Kinematic}" : "") +
-        $", invincible {Invincible}" + (HasDamage ? $", damage {Damage}" : "") +
+        $", invincible {Invincible}" + (Detached ? ", detached" : "") + (HasDamage ? $", damage {Damage}" : "") +
         $", {BodyChildren.Count(Children)} own children";
 }

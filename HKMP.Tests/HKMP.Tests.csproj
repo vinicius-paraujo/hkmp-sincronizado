@@ -6,6 +6,7 @@
 <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
 <Compile Include="../HKMP/Game/Client/Entity/BodyChildren.cs" Link="Production/BodyChildren.cs" />
+<Compile Include="../HKMP/Game/Client/Entity/RegisteredEntities.cs" Link="Production/RegisteredEntities.cs" />
 <Compile Include="../HKMP/Game/Client/Entity/HandoverPosition.cs" Link="Production/HandoverPosition.cs" />
 <Compile Include="../HKMP/Game/Client/Entity/HandoverActivity.cs" Link="Production/HandoverActivity.cs" />
     <Compile Include="../HKMP/Game/Client/Entity/HandoverInitialization.cs" Link="Production/HandoverInitialization.cs" />

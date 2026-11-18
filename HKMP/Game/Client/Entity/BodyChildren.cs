@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hkmp.Game.Client.Entity;
@@ -24,7 +24,7 @@ internal static class BodyChildren {
     public static List<Node> Read(GameObject body) {
         var nodes = new List<Node>();
         foreach (Transform child in body.transform) {
-            if (EntityRegistry.TryGetEntry(child.gameObject, out _)) {
+            if (RegisteredEntities.IsEntity(child.gameObject)) {
                 continue;
             }
 
@@ -46,7 +46,7 @@ internal static class BodyChildren {
     public static int Apply(GameObject body, List<Node> nodes) {
         var byName = new Dictionary<string, Queue<GameObject>>();
         foreach (Transform child in body.transform) {
-            if (EntityRegistry.TryGetEntry(child.gameObject, out _)) {
+            if (RegisteredEntities.IsEntity(child.gameObject)) {
                 continue;
             }
 

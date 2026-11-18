@@ -23,7 +23,7 @@ internal static class HandoverParents {
             // A carrier such as a summon releases its enemy by taking it out of itself and switching itself off.
             // That release ran on the previous host only, so here the enemy is still inside the carrier; switching
             // the carrier back on would restart it with the enemy trapped, so the enemy is taken out instead.
-            if (EntityRegistry.TryGetEntry(parent.gameObject, out _)) {
+            if (RegisteredEntities.IsEntity(parent.gameObject)) {
                 Logger.Info($"  Entity {entity} taken out of '{parent.name}', which released it on the previous host");
                 original.transform.SetParent(null, true);
                 return;

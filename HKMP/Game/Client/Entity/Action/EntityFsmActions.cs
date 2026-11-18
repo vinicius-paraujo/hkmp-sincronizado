@@ -187,7 +187,7 @@ internal static class EntityFsmActions {
             return false;
         }
 
-        return EntityRegistry.TryGetEntry(gameObject, out _);
+        return RegisteredEntities.IsEntity(gameObject);
     }
     
     /// <summary>
