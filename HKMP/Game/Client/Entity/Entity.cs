@@ -1242,36 +1242,26 @@ internal class Entity {
 
             HandoverFsmReferences.Fill(fsm, $"({Id}, {Type})");
 
-            // Before setting the state, we replace the actions of the to-be state to only include the ones that
-            // should be executed again (including actions with "everyFrame" on true or that continuously check
-            // collisions for example).
-            var state = fsm.GetState(snapshot.CurrentState);
+            // The machine enters its state again from the start, running every action except the ones that must not
+            // happen twice, such as creating a projectile the previous host already created. A state that chooses its
+            // way out chooses again, and the state's own effects, such as its animation, are made again.
+            var stateName = ReentryRegistry.StateToEnter(Type, fsm.Fsm.Name, snapshot.CurrentState);
+            var state = fsm.GetState(stateName);
             if (state == null) {
                 Logger.Debug("  Not setting FSM state, because current state is empty");
                 continue;
             }
-            
-            Logger.Debug($"  Setting FSM state: {snapshot.CurrentState}");
-            
-            var oldActions = state.Actions;
-            var newActions = oldActions.Where(ActionRegistry.IsActionContinuous).ToArray();
 
-            Logger.Debug($"  Only using actions: {string.Join(", ", newActions.Select(a => a.GetType().ToString()))}");
+            var allActions = state.Actions;
+            var runActions = ReentryRegistry.ActionsToRun(allActions);
+            Logger.Info($"  Entity ({Id}, {Type}) enters '{fsm.Fsm.Name}' again in '{stateName}'" +
+                        (stateName != snapshot.CurrentState ? $" (anchor of '{snapshot.CurrentState}')" : "") +
+                        $", running {runActions.Length} of {allActions.Length} actions; left out: " +
+                        string.Join(", ", allActions.Except(runActions).Select(a => a.GetType().Name)));
 
-            // Replace the actions, set the state and reset the actions again
-            state.Actions = newActions;
-            fsm.SetState(snapshot.CurrentState);
-            state.Actions = oldActions;
-
-            // The replica's animation can be one the previous host never sent, such as a buried enemy shown
-            // standing; the animation of the state the machine resumes in is the one the enemy really has.
-            foreach (var play in oldActions.OfType<HutongGames.PlayMaker.Actions.Tk2dPlayAnimation>()) {
-                var target = fsm.Fsm.GetOwnerDefaultTarget(play.gameObject);
-                var animator = target == null ? null : target.GetComponent<tk2dSpriteAnimator>();
-                if (animator == null || string.IsNullOrEmpty(play.clipName.Value)) continue;
-                animator.Play(play.clipName.Value);
-                Logger.Info($"  Entity ({Id}, {Type}) plays '{play.clipName.Value}' of the state it resumes in");
-            }
+            state.Actions = runActions;
+            fsm.SetState(stateName);
+            state.Actions = allActions;
 
             // The clip the previous host last showed outranks the resumed state's own.
             if (fsmIndex == 0 && _presentation != null && _presentation.Clip.Length > 0 && _animator.Host != null) {
