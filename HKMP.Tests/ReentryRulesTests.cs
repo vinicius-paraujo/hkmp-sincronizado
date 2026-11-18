@@ -15,6 +15,7 @@ public class ReentryRulesTests {
         ["Wait"] = ReentryCategory.Wait,
         ["SetGravity2dScale"] = ReentryCategory.Set,
         ["FloatAdd"] = ReentryCategory.Accumulate,
+        ["SetIntValue"] = ReentryCategory.Restored,
         ["SpawnObjectFromGlobalPool"] = ReentryCategory.Create,
         ["AudioPlaySimple"] = ReentryCategory.Cosmetic,
         ["SetParent"] = ReentryCategory.Structure,
@@ -45,6 +46,14 @@ public class ReentryRulesTests {
         Assert.False(Runs("AudioPlaySimple"));
         Assert.False(Runs("SetParent"));
         Assert.False(Runs("GotoPreviousState"));
+    }
+
+    // Gruz Mother's arena counted the young she left down to three, and each new scene host set the count back to
+    // seven when it entered the waiting state again, so the fight never ended.
+    [Fact]
+    public void A_value_written_to_the_machine_is_kept_from_the_snapshot() {
+        Assert.False(Runs("SetIntValue"));
+        Assert.True(Runs("SetIntValue", everyFrame: true));
     }
 
     [Fact]

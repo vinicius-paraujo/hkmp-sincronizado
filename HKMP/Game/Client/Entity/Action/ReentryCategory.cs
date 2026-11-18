@@ -19,6 +19,11 @@ internal enum ReentryCategory {
     Read,
     /// <summary>Changes a value from its current one; the previous host's result is already in the snapshot.</summary>
     Accumulate,
+    /// <summary>
+    /// Writes one of the machine's own variables. The snapshot already holds what it wrote there, with every later
+    /// change, such as an arena's count of enemies left; writing it again would undo those changes.
+    /// </summary>
+    Restored,
     /// <summary>Creates an object, which already exists or belongs to the previous host.</summary>
     Create,
     /// <summary>Sends an event or value to another object, which the previous host already delivered.</summary>

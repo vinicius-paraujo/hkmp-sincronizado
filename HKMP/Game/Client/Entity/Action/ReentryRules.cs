@@ -48,7 +48,7 @@ internal sealed class ReentryRules {
         }
 
         if (everyFrame && (category == ReentryCategory.Set || category == ReentryCategory.Read
-                           || category == ReentryCategory.Accumulate)) {
+                           || category == ReentryCategory.Accumulate || category == ReentryCategory.Restored)) {
             return ReentryCategory.Move;
         }
 
