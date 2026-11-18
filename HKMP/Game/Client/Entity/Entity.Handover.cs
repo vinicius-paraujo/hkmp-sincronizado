@@ -69,9 +69,15 @@ internal partial class Entity {
     /// <summary>
     /// Makes the entity a host entity if the client user became the scene host.
     /// </summary>
+    /// <remarks>
+    /// This is the first of two phases. Every entity of the room is prepared before any of them enters its states
+    /// again in <see cref="ReenterAfterHandover"/>, so no machine runs while another one, such as the boss a
+    /// projectile reports to, is not ready yet.
+    /// </remarks>
     public void MakeHost() {
         Logger.Info($"Making entity ({Id}, {Type}) a host entity");
 
+        _awaitsReentry = false;
         if (EndsWithoutTakingOver()) {
             return;
         }
@@ -81,9 +87,26 @@ internal partial class Entity {
         RestorePhysicsBody();
         AdoptHostRole();
         ResumeAnimation();
-        RestoreMachines();
+        PrepareMachines();
+        _awaitsReentry = true;
+    }
+
+    /// <summary>
+    /// The second phase of taking an entity over: enters each machine in its snapshot state again and settles the
+    /// body. Called once every entity of the room was prepared by <see cref="MakeHost"/>.
+    /// </summary>
+    public void ReenterAfterHandover() {
+        if (!_awaitsReentry) {
+            return;
+        }
+
+        _awaitsReentry = false;
+        ReenterMachines();
         SettleBody();
     }
+
+    /// <summary>Whether <see cref="MakeHost"/> prepared this entity and its machines still have to enter again.</summary>
+    private bool _awaitsReentry;
 
     /// <summary>
     /// The body state a handover in progress applies: the previous host's, or the replica's when none arrived.
@@ -257,9 +280,9 @@ internal partial class Entity {
     }
 
     /// <summary>
-    /// Initializes each machine when needed, restores its snapshot and enters its state again.
+    /// Initializes each machine when needed and restores its snapshot, without entering any state yet.
     /// </summary>
-    private void RestoreMachines() {
+    private void PrepareMachines() {
         Logger.Debug("  Restoring FSMs from snapshots");
 
         var initialize = HandoverInitialization.ShouldInitialize(_originalInitialized);
@@ -272,10 +295,18 @@ internal partial class Entity {
 
             InitializeMachine(fsm, initialize);
             RestoreSnapshot(fsm, fsmIndex);
-            Reenter(fsm, fsmIndex);
         }
 
         _originalInitialized = true;
+    }
+
+    /// <summary>
+    /// Enters every machine of the entity in its snapshot state again, once all of them hold their snapshot.
+    /// </summary>
+    private void ReenterMachines() {
+        for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
+            Reenter(_fsms.Host[fsmIndex], fsmIndex);
+        }
     }
 
     /// <summary>

@@ -151,6 +151,16 @@ internal class EntityManager {
             }
         }
 
+        // Only once every entity is prepared do their machines enter their states again, all in this frame: a
+        // machine that reports to another one, such as a projectile to its boss, finds it ready.
+        foreach (var entity in _entities.Values) {
+            try {
+                entity.ReenterAfterHandover();
+            } catch (Exception e) {
+                Logger.Error($"Could not resume the machines of entity ({entity.Id}, {entity.Type}):\n{e}");
+            }
+        }
+
         // Taking over one entity can switch off a group that holds others, such as an arena wave, so the groups
         // are only checked once every entity has been taken over.
         foreach (var entity in _entities.Values) {
