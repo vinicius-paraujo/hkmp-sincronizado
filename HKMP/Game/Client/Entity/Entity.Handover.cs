@@ -76,11 +76,14 @@ internal partial class Entity {
     /// again in <see cref="ReenterAfterHandover"/>, so no machine runs while another one, such as the boss a
     /// projectile reports to, is not ready yet.
     /// </remarks>
-    public void MakeHost() {
+    /// <param name="deaths">The entities of the room known to be dead, from the server's authority over it.</param>
+    public void MakeHost(KnownDeaths deaths) {
         Logger.Info($"Making entity ({Id}, {Type}) a host entity");
 
         _awaitsReentry = false;
-        if (EndsWithoutTakingOver()) {
+        // A dead entity comes first: its replica can already be gone, and the paths below for a missing object only
+        // switch the original off, which left it alive for the game.
+        if (TakesOverDead(deaths) || EndsWithoutTakingOver()) {
             return;
         }
 
@@ -169,6 +172,38 @@ internal partial class Entity {
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Takes over a dead entity dead: the original stays switched off and dead, and its machines are not resumed.
+    /// </summary>
+    /// <remarks>
+    /// The server's list decides, and so does the original's own death on this client, since a player that killed
+    /// the entity while hosting has it dead before the server's list reaches it.
+    /// </remarks>
+    /// <param name="deaths">The entities of the room known to be dead.</param>
+    /// <returns>Whether the entity was dead.</returns>
+    private bool TakesOverDead(KnownDeaths deaths) {
+        if (Object.Host == null || !_components.TryGetValue(EntityComponentType.Health, out var component)
+            || !(component is HealthManagerComponent health)) {
+            return false;
+        }
+
+        // Kept in the log while the cause of an original found alive after its own death is not known.
+        Logger.Info($"  Entity ({Id}, {Type}) at the handover: {health.OriginalState}, known dead: {deaths.Contains(Id)}");
+        if (!deaths.Contains(Id) && !health.OriginalDied) {
+            return false;
+        }
+
+        if (Object.Client != null) {
+            Object.Client.SetActive(false);
+        }
+
+        Object.Host.SetActive(false);
+        AdoptHostRole();
+        health.AdoptDeath();
+        Logger.Info($"  Entity ({Id}, {Type}) was taken over dead");
+        return true;
     }
 
     /// <summary>

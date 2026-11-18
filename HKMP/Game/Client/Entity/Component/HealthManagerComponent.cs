@@ -1,6 +1,7 @@
 using Hkmp.Networking.Client;
 using Hkmp.Networking.Packet.Data;
 using Hkmp.Util;
+using Modding;
 using UnityEngine;
 using Logger = Hkmp.Logging.Logger;
 
@@ -36,13 +37,18 @@ internal class HealthManagerComponent : EntityComponent {
     /// </summary>
     private int? _knownHealth;
 
+    /// <summary>The type of the entity, sent with its death so the server can tell addons which entity died.</summary>
+    private readonly EntityType _entityType;
+
     public HealthManagerComponent(
         NetClient netClient,
         ushort entityId,
+        EntityType entityType,
         HostClientPair<GameObject> gameObject,
         HostClientPair<HealthManager> healthManager
     ) : base(netClient, entityId, gameObject) {
         _healthManager = healthManager;
+        _entityType = entityType;
 
         _lastInvincible = healthManager.Host.IsInvincible;
         _lastInvincibleFromDirection = healthManager.Host.InvincibleFromDirection;
@@ -95,17 +101,13 @@ internal class HealthManagerComponent : EntityComponent {
         var data = new EntityNetworkData {
             Type = EntityComponentType.Death
         };
-
-        if (attackDirection.HasValue) {
-            data.Packet.Write(true);
-            data.Packet.Write(attackDirection.Value);
-        } else {
-            data.Packet.Write(false);
-        }
-
-        data.Packet.Write((byte)attackType);
-
-        data.Packet.Write(ignoreEvasion);
+        new EntityDeathData {
+            EntityType = _entityType,
+            EntityName = self.gameObject.name,
+            AttackDirection = attackDirection,
+            AttackType = (byte) attackType,
+            IgnoreEvasion = ignoreEvasion
+        }.WriteData(data.Packet);
 
         SendData(data);
     }
@@ -176,11 +178,51 @@ internal class HealthManagerComponent : EntityComponent {
         }
     }
 
+    /// <summary>
+    /// Leaves the original dead, as the death on the previous scene host made it, without dying a second time.
+    /// </summary>
+    /// <remarks>
+    /// Dying again would repeat what the previous host already did: the corpse, which can release enemies of its own,
+    /// the geo and the notifications. The arena's count of enemies left travels in the arena's own snapshot, so it is
+    /// only marked as told, which keeps a later death from counting this enemy twice.
+    /// </remarks>
+    internal void AdoptDeath() {
+        var original = _healthManager.Host;
+        if (original == null || original.isDead) {
+            return;
+        }
+
+        original.hp = 0;
+        original.isDead = true;
+        var damage = original.GetComponent<DamageHero>();
+        if (damage != null) {
+            damage.damageDealt = 0;
+        }
+
+        ReflectionHelper.SetField(original, "notifiedBattleScene", true);
+        original.gameObject.SetActive(false);
+        Logger.Info($"  Entity {original.name} takes on the death of the previous scene host");
+    }
+
+    /// <summary>Whether the original died on this client, as it does for the scene host that killed it.</summary>
+    internal bool OriginalDied => _healthManager.Host != null && _healthManager.Host.GetIsDead();
+
+    /// <summary>The original's health and death, for the log.</summary>
+    internal string OriginalState => _healthManager.Host == null ? "no original"
+        : $"hp {_healthManager.Host.hp}, dead {_healthManager.Host.GetIsDead()}";
+
     /// <inheritdoc />
     public override void Update(EntityNetworkData data, bool alreadyInSceneUpdate) {
         Logger.Info("Received health manager update");
 
         if (!IsControlled) {
+            // The previous scene host's death of this entity can arrive after this client took it over; it died all
+            // the same, so the original takes the death on instead of living on.
+            if (data.Type == EntityComponentType.Death) {
+                AdoptDeath();
+                return;
+            }
+
             Logger.Info("  Entity was not controlled");
             return;
         }
@@ -193,17 +235,11 @@ internal class HealthManagerComponent : EntityComponent {
                 _healthManager.Client.hp = _receivedHealth.Value;
             }
         } else if (data.Type == EntityComponentType.Death) {
-            var attackDirection = new float?();
-            if (data.Packet.ReadBool()) {
-                attackDirection = data.Packet.ReadFloat();
-            }
-
-            var attackType = (AttackTypes) data.Packet.ReadByte();
-            var ignoreEvasion = data.Packet.ReadBool();
+            var death = EntityDeathData.ReadData(data.Packet);
 
             // Set a boolean to indicate that the client health manager is allowed to execute the Die method
             _allowDeath = true;
-            _healthManager.Client.Die(attackDirection, attackType, ignoreEvasion);
+            _healthManager.Client.Die(death.AttackDirection, (AttackTypes) death.AttackType, death.IgnoreEvasion);
         } else if (data.Type == EntityComponentType.Invincibility) {
             var newInvincible = data.Packet.ReadBool();
             var newInvincibleFromDir = data.Packet.ReadByte();

@@ -113,6 +113,16 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
     public uint RoleDecision { get; set; }
 
     /// <summary>
+    /// The room's current epoch: the one the player starts as scene host, or the one of the host it joins.
+    /// </summary>
+    public uint Epoch { get; set; }
+
+    /// <summary>
+    /// The entities of the room the server recorded as dead, which the entering player treats as dead.
+    /// </summary>
+    public List<ushort> DeadEntities { get; set; } = new List<ushort>();
+
+    /// <summary>
     /// Construct the client player already in scene data.
     /// </summary>
     public ClientPlayerAlreadyInScene() {
@@ -158,6 +168,8 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
 
         packet.Write(SceneHost);
         packet.Write(RoleDecision);
+        packet.Write(Epoch);
+        EntityIdList.Write(packet, DeadEntities);
     }
 
     /// <inheritdoc />
@@ -212,6 +224,8 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
 
         SceneHost = packet.ReadBool();
         RoleDecision = packet.ReadUInt();
+        Epoch = packet.ReadUInt();
+        DeadEntities = EntityIdList.Read(packet);
     }
 }
 

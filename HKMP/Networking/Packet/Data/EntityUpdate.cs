@@ -418,6 +418,12 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
     public Dictionary<byte, EntityHostFsmData> HostFsmData { get; }
 
     /// <summary>
+    /// The room's epoch in which the sender wrote this update: the server only records a death from the player that
+    /// hosted the room in that epoch.
+    /// </summary>
+    public uint Epoch { get; set; }
+
+    /// <summary>
     /// Construct the reliable entity update data.
     /// </summary>
     public ReliableEntityUpdate() {
@@ -429,6 +435,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
     /// <inheritdoc />
     public override void WriteData(IPacket packet) {
         packet.Write(Id);
+        packet.Write(Epoch);
 
         // Construct the byte flag representing update types
         byte updateTypeFlag = 0;
@@ -480,6 +487,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
     /// <inheritdoc />
     public override void ReadData(IPacket packet) {
         Id = packet.ReadUShort();
+        Epoch = packet.ReadUInt();
 
         // Read the byte flag representing update types and reconstruct it
         var updateTypeFlag = packet.ReadByte();

@@ -825,6 +825,8 @@ internal class ClientManager : IClientManager {
         }
 
         if (_fullSynchronisation) {
+            _entityManager.ApplyRoomAuthority(alreadyInScene.Epoch, alreadyInScene.DeadEntities);
+
             // The rest of this packet describes the room and still applies when a newer decision got here first
             if (!_roleOrder.Accept(alreadyInScene.RoleDecision)) {
                 Logger.Info("  Keeping the scene host role, a newer decision was already applied");
@@ -1035,6 +1037,9 @@ internal class ClientManager : IClientManager {
             Logger.Info($"  Current scene ({currentScene}) does not match scene for host transfer, ignoring");
             return;
         }
+
+        // The deaths are known before the role changes, so a new scene host takes dead entities over dead.
+        _entityManager.ApplyRoomAuthority(hostTransfer.Epoch, hostTransfer.DeadEntities);
 
         if (!hostTransfer.IsHost) {
             if (_entityManager.IsSceneHost) _entityManager.LoseSceneHost();

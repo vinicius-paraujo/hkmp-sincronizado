@@ -13,6 +13,12 @@ namespace Hkmp.Networking.Client;
 /// </summary>
 internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
     /// <summary>
+    /// The current room's epoch, stamped on every reliable entity update this client sends, so the server knows in
+    /// which epoch the data was written even when it arrives after a change of scene host.
+    /// </summary>
+    public uint RoomEpoch { get; set; }
+
+    /// <summary>
     /// Find an existing or create a new PlayerUpdate instance in the current update packet.
     /// </summary>
     /// <returns>The existing or new PlayerUpdate instance.</returns>
@@ -211,7 +217,8 @@ internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, Server
                 };
             } else {
                 entityUpdate = (T) (object) new ReliableEntityUpdate {
-                    Id = entityId
+                    Id = entityId,
+                    Epoch = RoomEpoch
                 };
             }
 

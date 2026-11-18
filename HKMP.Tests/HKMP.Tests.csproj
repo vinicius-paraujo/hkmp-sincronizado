@@ -25,4 +25,13 @@
 <Compile Include="../HKMP/Math/Vector3.cs" Link="Production/Vector3.cs" />
 <Compile Include="../HKMP/Networking/Chunk/ChunkSender.cs" Link="Production/ChunkSender.cs" />
 <Compile Include="../HKMP/Ui/SaveSlotSelection.cs" Link="Production/SaveSlotSelection.cs" />
+<Compile Include="../HKMP/Game/Server/RoomAuthority.cs" Link="Production/RoomAuthority.cs" />
+<Compile Include="../HKMP/Game/Client/Entity/KnownDeaths.cs" Link="Production/KnownDeaths.cs" />
+<Compile Include="../HKMP/Game/Server/RoomAuthorities.cs" Link="Production/RoomAuthorities.cs" />
+<Compile Include="../HKMP/Game/Client/Entity/EntityType.cs" Link="Production/EntityType.cs" />
+<Compile Include="../HKMP/Networking/Packet/Packet.cs" Link="Production/Packet.cs" />
+<Compile Include="../HKMP/Networking/Packet/IPacketData.cs" Link="Production/IPacketData.cs" />
+<Compile Include="../HKMP/Networking/Packet/Data/HostTransfer.cs" Link="Production/HostTransfer.cs" />
+<Compile Include="../HKMP/Networking/Packet/Data/EntityIdList.cs" Link="Production/EntityIdList.cs" />
+<Compile Include="../HKMP/Networking/Packet/Data/EntityDeathData.cs" Link="Production/EntityDeathData.cs" />
 </ItemGroup></Project>

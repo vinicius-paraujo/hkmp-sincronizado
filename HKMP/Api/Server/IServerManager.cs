@@ -107,4 +107,9 @@ public interface IServerManager {
     /// Event that is called when a player sends a chat message.
     /// </summary>
     event Action<IPlayerChatEvent> PlayerChatEvent;
+
+    /// <summary>
+    /// Event that is called when the server records the death of an entity in a room.
+    /// </summary>
+    event Action<IEntityDeathEvent> EntityDeathEvent;
 }

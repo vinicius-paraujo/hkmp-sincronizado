@@ -187,17 +187,23 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="entityUpdateList">An enumerable of EntityUpdate instances to add.</param>
     /// <param name="reliableEntityUpdateList">An enumerable of ReliableEntityUpdate instances to add.</param>
     /// <param name="sceneHost">Whether the player is the scene host.</param>
+    /// <param name="epoch">The room's current epoch.</param>
+    /// <param name="deadEntities">The entities of the room the server recorded as dead.</param>
     public void AddPlayerAlreadyInSceneData(
         IEnumerable<ClientPlayerEnterScene> playerEnterSceneList,
         IEnumerable<EntitySpawn> entitySpawnList = null,
         IEnumerable<EntityUpdate> entityUpdateList = null,
         IEnumerable<ReliableEntityUpdate> reliableEntityUpdateList = null,
-        bool sceneHost = false
+        bool sceneHost = false,
+        uint epoch = 0,
+        List<ushort> deadEntities = null
     ) {
         lock (Lock) {
             var alreadyInScene = new ClientPlayerAlreadyInScene {
                 SceneHost = sceneHost,
-                RoleDecision = ++_roleDecision
+                RoleDecision = ++_roleDecision,
+                Epoch = epoch,
+                DeadEntities = deadEntities ?? new List<ushort>()
             };
             alreadyInScene.PlayerEnterSceneList.AddRange(playerEnterSceneList);
 
@@ -431,9 +437,11 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="isActive">Whether the entity is active or not.</param>
-    public void UpdateEntityIsActive(ushort entityId, bool isActive) {
+    /// <param name="epoch">The room's epoch in which the scene host wrote it.</param>
+    public void UpdateEntityIsActive(ushort entityId, bool isActive, uint epoch) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
+            entityUpdate.Epoch = epoch;
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Active);
             entityUpdate.IsActive = isActive;
@@ -445,9 +453,11 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="data">The list of entity network data to add.</param>
-    public void AddEntityData(ushort entityId, List<EntityNetworkData> data) {
+    /// <param name="epoch">The room's epoch in which the scene host wrote it.</param>
+    public void AddEntityData(ushort entityId, List<EntityNetworkData> data, uint epoch) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
+            entityUpdate.Epoch = epoch;
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
             entityUpdate.GenericData.AddRange(data);
@@ -460,9 +470,11 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="fsmIndex">The index of the FSM of the entity.</param>
     /// <param name="data">The host FSM data to add.</param>
-    public void AddEntityHostFsmData(ushort entityId, byte fsmIndex, EntityHostFsmData data) {
+    /// <param name="epoch">The room's epoch in which the scene host wrote it.</param>
+    public void AddEntityHostFsmData(ushort entityId, byte fsmIndex, EntityHostFsmData data, uint epoch) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
+            entityUpdate.Epoch = epoch;
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.HostFsm);
 
@@ -479,12 +491,16 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// </summary>
     /// <param name="sceneName">The name of the scene in which the player becomes scene host.</param>
     /// <param name="isHost">False when the player loses the role instead.</param>
-    public void SetSceneHostTransfer(string sceneName, bool isHost = true) {
+    /// <param name="epoch">The room's epoch the change of host starts.</param>
+    /// <param name="deadEntities">The entities of the room the server recorded as dead.</param>
+    public void SetSceneHostTransfer(string sceneName, bool isHost, uint epoch, List<ushort> deadEntities) {
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, new HostTransfer {
                 SceneName = sceneName,
                 IsHost = isHost,
-                RoleDecision = ++_roleDecision
+                RoleDecision = ++_roleDecision,
+                Epoch = epoch,
+                DeadEntities = deadEntities
             });
         }
     }

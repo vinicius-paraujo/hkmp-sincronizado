@@ -175,7 +175,15 @@ internal abstract class ServerManager : IServerManager {
     /// <inheritdoc />
     public event Action<IPlayerChatEvent> PlayerChatEvent;
 
+    /// <inheritdoc />
+    public event Action<IEntityDeathEvent> EntityDeathEvent;
+
     #endregion
+
+    /// <summary>
+    /// The server's authority over each room with players: its scene host in each epoch and its dead entities.
+    /// </summary>
+    private readonly RoomAuthorities _rooms = new RoomAuthorities();
 
     /// <summary>
     /// Constructs the server manager.
@@ -397,7 +405,27 @@ internal abstract class ServerManager : IServerManager {
             
             DeregisterCommands();
             DeregisterPacketHandlers();
+
+            // This manager outlives the server it ran, so no room of this session reaches the next one.
+            _entityData.Clear();
+            _rooms.Clear();
         }
+    }
+
+    /// <summary>
+    /// Forgets a room once no player is in it: the data of its entities and the authority over it. The game loads
+    /// the room again on the next visit, with its entities alive and in their starting places.
+    /// </summary>
+    /// <param name="sceneName">The scene of the room.</param>
+    private void ForgetRoom(string sceneName) {
+        foreach (var keyDataPair in _entityData) {
+            if (keyDataPair.Key.Scene == sceneName) {
+                _entityData.TryRemove(keyDataPair.Key, out _);
+            }
+        }
+
+        _rooms.Forget(sceneName);
+        Logger.Info($"Room {sceneName} forgotten, no player is in it");
     }
 
     /// <summary>
@@ -591,12 +619,28 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
+        // A player without a scene yet has no room, and so no epoch nor deaths.
+        uint epoch = 0;
+        var deadEntities = new List<ushort>();
+        if (!string.IsNullOrEmpty(playerData.CurrentScene)) {
+            var room = _rooms.For(playerData.CurrentScene);
+            epoch = FullSynchronisation && !alreadyPlayersInScene ? room.BeginHost(playerData.Id) : room.Epoch;
+            deadEntities = room.DeadEntities();
+        }
+
+        // The stored state is the room's present, so it carries the current epoch and no copy discards it as old.
+        foreach (var update in reliableEntityUpdateList) {
+            update.Epoch = epoch;
+        }
+
         _netServer.GetUpdateManagerForClient(playerData.Id)?.AddPlayerAlreadyInSceneData(
             enterSceneList,
             entitySpawnList,
             entityUpdateList,
             reliableEntityUpdateList,
-            FullSynchronisation && !alreadyPlayersInScene
+            FullSynchronisation && !alreadyPlayersInScene,
+            epoch,
+            deadEntities
         );
     }
 
@@ -803,6 +847,11 @@ internal abstract class ServerManager : IServerManager {
             Logger.Warn($"Received EntityUpdate data, but player with ID {id} is not in mapping");
             return;
         }
+
+        // Only the scene host runs the room's entities; anything else is from a host that already lost the role.
+        if (!playerData.IsSceneHost) {
+            return;
+        }
         
         // Create the key for the entity data
         var serverEntityKey = new ServerEntityKey(
@@ -880,6 +929,24 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
+        var recordedDeaths = entityUpdate.UpdateTypes.Contains(EntityUpdateType.Data)
+            ? RecordDeaths(id, playerData.CurrentScene, entityUpdate)
+            : new List<EntityNetworkData>();
+
+        // Only the scene host of the room's current epoch changes the room. An update written in an earlier epoch,
+        // or by a player that does not host the room, describes a state that is no longer the room's, and would undo
+        // what the current host did; only the deaths it reports still count, as facts.
+        if (!playerData.IsSceneHost || entityUpdate.Epoch != _rooms.For(playerData.CurrentScene).Epoch) {
+            if (recordedDeaths.Count == 0) {
+                return;
+            }
+
+            entityUpdate.UpdateTypes.Clear();
+            entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
+            entityUpdate.GenericData.Clear();
+            entityUpdate.GenericData.AddRange(recordedDeaths);
+        }
+
         // Create the key for the entity data
         var serverEntityKey = new ServerEntityKey(
             playerData.CurrentScene,
@@ -900,7 +967,8 @@ internal abstract class ServerManager : IServerManager {
                 otherId => {
                     _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityIsActive(
                         entityUpdate.Id,
-                        entityUpdate.IsActive
+                        entityUpdate.IsActive,
+                        entityUpdate.Epoch
                     );
                 }
             );
@@ -908,6 +976,7 @@ internal abstract class ServerManager : IServerManager {
             // Pooled bodies can start another life without receiving a new entity ID.
             if (entityUpdate.IsActive && entityData.IsActive == false) {
                 entityData.GenericData.RemoveAll(data => data.Type == EntityComponentType.Death);
+                _rooms.For(playerData.CurrentScene).Revive(entityUpdate.Id);
             }
             entityData.IsActive = entityUpdate.IsActive;
         }
@@ -919,7 +988,8 @@ internal abstract class ServerManager : IServerManager {
                 otherId => {
                     _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
                         entityUpdate.Id,
-                        entityUpdate.GenericData
+                        entityUpdate.GenericData,
+                        entityUpdate.Epoch
                     );
                 }
             );
@@ -970,7 +1040,8 @@ internal abstract class ServerManager : IServerManager {
                             fsmIndex,
                             // Each queue merges into what it holds, so sharing one instance lets a merge change
                             // data another queue is writing, and the receiver cannot parse the result.
-                            data.Snapshot()
+                            data.Snapshot(),
+                            entityUpdate.Epoch
                         );
                     }
                 );
@@ -1058,7 +1129,9 @@ internal abstract class ServerManager : IServerManager {
                 // We check if the player is the scene host, which will never be the case if FullSync is disabled
                 if (playerData.IsSceneHost) {
                     // If the leaving player was the scene host, we can make this player the new scene host
-                    updateManager.SetSceneHostTransfer(sceneName);
+                    var room = _rooms.For(sceneName);
+                    var epoch = room.BeginHost(idPlayerDataPair.Key);
+                    updateManager.SetSceneHostTransfer(sceneName, true, epoch, room.DeadEntities());
 
                     // Reset the scene host variable in the leaving player, so only a single other player
                     // becomes the scene host
@@ -1083,13 +1156,8 @@ internal abstract class ServerManager : IServerManager {
             // player's status of scene host
             playerData.IsSceneHost = false;
 
-            // If the scene is now empty, we can remove all data from stored entities in that scene
             if (isSceneNowEmpty) {
-                foreach (var keyDataPair in _entityData) {
-                    if (keyDataPair.Key.Scene == sceneName) {
-                        _entityData.TryRemove(keyDataPair.Key, out _);
-                    }
-                }
+                ForgetRoom(sceneName);
             }
         }
 
@@ -1115,6 +1183,7 @@ internal abstract class ServerManager : IServerManager {
         }
 
         var username = playerData.Username;
+        var sceneName = playerData.CurrentScene;
 
         // The leave-scene handling below runs after the player is removed from the mapping and so never reaches
         // its scene host transfer; without this, a room whose host disconnects freezes for everyone left in it.
@@ -1137,6 +1206,13 @@ internal abstract class ServerManager : IServerManager {
         _playerData.TryRemove(id, out _);
         
         HandlePlayerLeaveScene(id, true, timeout);
+
+        // That handling no longer finds the player either, so a room it was the last one in is forgotten here;
+        // otherwise the next visit receives the entities and deaths of this one.
+        if (FullSynchronisation && !string.IsNullOrEmpty(sceneName)
+            && !_playerData.Values.Any(other => other.CurrentScene == sceneName)) {
+            ForgetRoom(sceneName);
+        }
 
         try {
             PlayerDisconnectEvent?.Invoke(playerData);
@@ -1463,6 +1539,42 @@ internal abstract class ServerManager : IServerManager {
     }
 
     /// <summary>
+    /// Records in the room's authority the deaths an entity update reports, and tells addons about each new one.
+    /// </summary>
+    /// <param name="id">The ID of the player that sent the update.</param>
+    /// <param name="sceneName">The scene of the room.</param>
+    /// <param name="entityUpdate">The update, with the epoch in which the sender wrote it.</param>
+    /// <returns>The death data the room's authority accepted, new or already recorded.</returns>
+    private List<EntityNetworkData> RecordDeaths(ushort id, string sceneName, ReliableEntityUpdate entityUpdate) {
+        var accepted = new List<EntityNetworkData>();
+        var room = _rooms.For(sceneName);
+        foreach (var data in entityUpdate.GenericData) {
+            if (data.Type != EntityComponentType.Death) {
+                continue;
+            }
+
+            if (!room.RecordDeath(id, entityUpdate.Epoch, entityUpdate.Id)) {
+                // A repeated report of a death already recorded from this host still reaches the replicas.
+                if (room.IsDead(entityUpdate.Id) && room.HostedIn(id, entityUpdate.Epoch)) {
+                    accepted.Add(data);
+                }
+
+                continue;
+            }
+
+            accepted.Add(data);
+
+            // Read from a copy, so the stored and relayed data keeps its own reading position.
+            var death = EntityDeathData.ReadData(new Packet(data.Packet.ToArray()));
+            Logger.Info($"Death of entity {entityUpdate.Id} ({death.EntityType}) in {sceneName} recorded, epoch {entityUpdate.Epoch}");
+            EntityDeathEvent?.Invoke(new EntityDeathEvent(sceneName, entityUpdate.Id, death.EntityType.ToString(),
+                death.EntityName));
+        }
+
+        return accepted;
+    }
+
+    /// <summary>
     /// Move the scene host role of the given player to another player in the same scene, preferring one that is
     /// still sending updates. Nothing changes when no one else is in the scene.
     /// </summary>
@@ -1485,9 +1597,12 @@ internal abstract class ServerManager : IServerManager {
         var (newHostId, newHost) = (candidates[0].Key, candidates[0].Value);
         playerData.IsSceneHost = false;
         newHost.IsSceneHost = true;
-        _netServer.GetUpdateManagerForClient(newHostId)?.SetSceneHostTransfer(sceneName);
+        var room = _rooms.For(sceneName);
+        var epoch = room.BeginHost(newHostId);
+        var dead = room.DeadEntities();
+        _netServer.GetUpdateManagerForClient(newHostId)?.SetSceneHostTransfer(sceneName, true, epoch, dead);
         // A stalled host still receives; without this it would keep acting as host once it resumes.
-        if (notifyPrevious) _netServer.GetUpdateManagerForClient(id)?.SetSceneHostTransfer(sceneName, false);
+        if (notifyPrevious) _netServer.GetUpdateManagerForClient(id)?.SetSceneHostTransfer(sceneName, false, epoch, dead);
         Logger.Info($"Scene host of {sceneName} moved from {id} to {newHostId}");
     }
 

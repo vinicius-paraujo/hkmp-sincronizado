@@ -415,6 +415,7 @@ internal partial class Entity {
             var hmComponent = new HealthManagerComponent(
                 _netClient,
                 Id,
+                Type,
                 Object,
                 healthManager
             );

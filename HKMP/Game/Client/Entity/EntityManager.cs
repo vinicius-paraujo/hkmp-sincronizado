@@ -47,6 +47,14 @@ internal class EntityManager {
     /// </summary>
     private readonly Queue<BaseEntityUpdate> _receivedUpdates;
 
+    /// <summary>
+    /// The current room's epoch, as the server last told this client: the one it hosts in, or the one of the host.
+    /// </summary>
+    public uint RoomEpoch { get; private set; }
+
+    /// <summary>The entities of the current room this client knows to be dead.</summary>
+    private readonly KnownDeaths _knownDeaths = new KnownDeaths();
+
     public EntityManager(NetClient netClient) {
         _netClient = netClient;
         _entities = new Dictionary<ushort, Entity>();
@@ -88,6 +96,33 @@ internal class EntityManager {
         FindGameObject.Find -= OnFindGameObject;
 
         ClearEntities();
+    }
+
+    /// <summary>
+    /// Takes in what the server's authority over the room says: its current epoch and its dead entities. Called when
+    /// entering the room and at each change of scene host, before the role changes.
+    /// </summary>
+    /// <param name="epoch">The room's current epoch.</param>
+    /// <param name="deadEntities">The entities of the room the server recorded as dead.</param>
+    public void ApplyRoomAuthority(uint epoch, IEnumerable<ushort> deadEntities) {
+        RoomEpoch = epoch;
+        _netClient.UpdateManager.RoomEpoch = epoch;
+        _knownDeaths.Replace(deadEntities);
+    }
+
+    /// <summary>
+    /// Reduces an update to the deaths it reports, dropping everything else.
+    /// </summary>
+    /// <returns>Whether any death was left to apply.</returns>
+    private static bool KeepDeathsOnly(ReliableEntityUpdate entityUpdate) {
+        entityUpdate.GenericData.RemoveAll(data => data.Type != EntityComponentType.Death);
+        entityUpdate.UpdateTypes.Clear();
+        if (entityUpdate.GenericData.Count == 0) {
+            return false;
+        }
+
+        entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
+        return true;
     }
 
     /// <summary>
@@ -145,7 +180,7 @@ internal class EntityManager {
         foreach (var entity in _entities.Values) {
             // One entity failing must not leave the remaining ones, such as a boss, without a host.
             try {
-                entity.MakeHost();
+                entity.MakeHost(_knownDeaths);
             } catch (Exception e) {
                 Logger.Error($"Could not make entity ({entity.Id}, {entity.Type}) a host entity:\n{e}");
             }
@@ -307,6 +342,20 @@ internal class EntityManager {
     /// <param name="entityUpdate">The reliable entity update to handle.</param>
     /// <param name="alreadyInSceneUpdate">Whether this is the update from the already in scene packet.</param>
     public bool HandleReliableEntityUpdate(ReliableEntityUpdate entityUpdate, bool alreadyInSceneUpdate = false) {
+        // A death is known as soon as it arrives, even before its entity exists here, so a change of host that comes
+        // first takes the entity over dead.
+        if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Data)
+            && entityUpdate.GenericData.Exists(data => data.Type == EntityComponentType.Death)) {
+            _knownDeaths.Add(entityUpdate.Id);
+        }
+
+        // An update written in an epoch older than the one this client knows comes from a host that lost the room
+        // since, and would undo what the current host did, such as showing an entity alive again. Only its deaths
+        // still count.
+        if (entityUpdate.Epoch < RoomEpoch && !KeepDeathsOnly(entityUpdate)) {
+            return true;
+        }
+
         if (!_entities.TryGetValue(entityUpdate.Id, out var entity) || !IsSceneHostDetermined) {
             if (IsSceneHostDetermined) {
                 Logger.Debug($"Could not find entity ({entityUpdate.Id}) to apply update for; storing update for now");
@@ -460,6 +509,7 @@ internal class EntityManager {
         // Clear the list of entities and the queue of received updates that have not been applied yet
         _entities.Clear();
         _receivedUpdates.Clear();
+        _knownDeaths.Clear();
         
         MusicComponent.ClearInstance();
     }

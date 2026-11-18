@@ -59,13 +59,6 @@ namespace Hkmp.Networking {
         public const int MaxSlicesPerChunk = 256, MaxSliceSize = 1024, MaxChunkSize = 262144;
     }
 }
-namespace Hkmp.Networking.Packet {
-    internal sealed class Packet {
-        private readonly byte[] _bytes;
-        public Packet(byte[] bytes) { _bytes = bytes; }
-        public byte[] ToArray() => _bytes;
-    }
-}
 namespace Hkmp.Networking.Packet.Data {
     internal sealed class SliceAckData {
         public byte ChunkId; public ushort NumSlices; public bool[] Acked;
