@@ -330,16 +330,39 @@ internal partial class Entity {
         var initialize = HandoverInitialization.ShouldInitialize(_originalInitialized);
         Logger.Info($"  Entity ({Id}, {Type}) {(initialize ? "initializes its machines for the first time" : "keeps the setup of its machines")}");
 
+        // The game initializes a machine where the room placed the body, and some initializations fix things in
+        // the world from there, such as the range a burrowed boss waits on before rising. The first initialization
+        // runs at that place too, and the body goes back to where the handover put it afterwards.
+        // A body taken out of its parent has no room place in its current space, so it stays where it is.
+        var placed = initialize && !(_hasParent && _detached) ? MoveToInitialPlace() : (Vector3?) null;
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
-            var fsm = _fsms.Host[fsmIndex];
+            InitializeMachine(_fsms.Host[fsmIndex], initialize);
+        }
+        if (placed.HasValue) {
+            SetPlace(placed.Value);
+        }
 
-            Logger.Debug($"    Restoring FSM: {fsm.Fsm.Name}");
-
-            InitializeMachine(fsm, initialize);
-            RestoreSnapshot(fsm, fsmIndex);
+        for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
+            Logger.Debug($"    Restoring FSM: {_fsms.Host[fsmIndex].Fsm.Name}");
+            RestoreSnapshot(_fsms.Host[fsmIndex], fsmIndex);
         }
 
         _originalInitialized = true;
+    }
+
+    /// <summary>Moves the original to where the room placed it, and returns where it was.</summary>
+    private Vector3 MoveToInitialPlace() {
+        var placed = UsesParentSpace ? Object.Host.transform.localPosition : Object.Host.transform.position;
+        SetPlace(_initialPosition);
+        return placed;
+    }
+
+    private void SetPlace(Vector3 place) {
+        if (UsesParentSpace) {
+            Object.Host.transform.localPosition = place;
+        } else {
+            Object.Host.transform.position = place;
+        }
     }
 
     /// <summary>
