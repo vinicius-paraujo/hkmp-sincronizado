@@ -20,5 +20,13 @@
   "addressMissing": "Informe o endereço do servidor.",
   "portInvalid": "Informe uma porta válida.",
   "nameMissing": "Informe o nome do jogador.",
-  "nameTooLong": "Este nome é longo demais."
+  "nameTooLong": "Este nome é longo demais.",
+  "hostPortInUse": "Outro programa está usando esta porta. Feche-o ou escolha outra porta.",
+  "hostPortUnavailable": "O servidor não conseguiu abrir esta porta. Escolha outra porta.",
+  "hostServerFailed": "O servidor parou por causa de um erro. Hospede de novo.",
+  "hostLocalFailed": "Seu jogo não conseguiu se conectar ao seu próprio servidor. Hospede de novo.",
+  "playerListTitle": "Jogadores",
+  "playerListMore": "+{0} jogadores",
+  "playerListOption": "Lista de jogadores",
+  "playerListDescription": "Mostra os jogadores conectados e o ping de cada um enquanto o mapa rápido está seguro"
 }

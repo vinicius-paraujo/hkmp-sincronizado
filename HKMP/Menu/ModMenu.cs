@@ -7,6 +7,7 @@ using Hkmp.Game.Client;
 using Hkmp.Game.Server;
 using Hkmp.Game.Settings;
 using Hkmp.Networking.Client;
+using Hkmp.Ui;
 using Hkmp.Util;
 using Modding;
 using Modding.Menu;
@@ -265,11 +266,11 @@ internal class ModMenu {
                             Loader = () => _modSettings.FullSynchronisation ? 1 : 0
                         },
                         new IMenuMod.MenuEntry {
-                            Name = "Ping Display",
-                            Description = "HUD element that shows the player's ping in multiplayer games",
+                            Name = ConnectionFeedback.Get("playerListOption"),
+                            Description = ConnectionFeedback.Get("playerListDescription"),
                             Values = ["Off", "On"],
-                            Saver = index => _modSettings.DisplayPing = index == 1,
-                            Loader = () => _modSettings.DisplayPing ? 1 : 0
+                            Saver = index => _modSettings.ShowPlayerList = index == 1,
+                            Loader = () => _modSettings.ShowPlayerList ? 1 : 0
                         }
                     ],
                     c,

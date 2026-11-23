@@ -1,44 +1,67 @@
 namespace Hkmp.Game.Client;
 
 /// <summary>
-/// Keeps the order of the server's scene host decisions. Reliable data is applied as it arrives, so a resent decision
-/// can land after a newer one and would undo it. The server numbers its decisions, which makes an old one easy to spot.
+/// Keeps the order of the server's decisions about the room this client is in. Reliable data is applied as it
+/// arrives, so a resent decision can land after a newer one and would undo it. The server's epochs only grow, so the
+/// epoch of a decision tells which one is newer.
 /// </summary>
 internal sealed class RoleOrder {
-    private uint _latest;
-    private uint _latestRoom;
+    private string _scene;
+    private bool _roomApplied;
+    private uint _roleEpoch;
 
     /// <summary>
-    /// Whether the decision with the given number is newer than every decision applied so far.
+    /// The client entered a room. Decisions about earlier rooms no longer apply.
     /// </summary>
-    /// <param name="decision">The number the server gave the decision, starting at one.</param>
-    /// <returns>True if the decision should be applied.</returns>
-    public bool Accept(uint decision) {
-        if (decision <= _latest) {
-            return false;
+    /// <param name="scene">The scene of the room.</param>
+    public void EnterRoom(string scene) {
+        if (scene == _scene) {
+            return;
         }
 
-        _latest = decision;
-        return true;
+        _scene = scene;
+        _roomApplied = false;
+        _roleEpoch = 0;
     }
 
     /// <summary>
-    /// Whether a description of the room is newer than the last one applied. It is applied at most once, because an
-    /// older description would put players back in a room they already left.
+    /// Whether a description of the room should be applied. It is applied once per visit, because a resent copy
+    /// would put players back in the room that already left it, and one about another room is out of date.
     /// </summary>
-    /// <param name="decision">The number the server gave the description.</param>
+    /// <param name="scene">The scene the description is about.</param>
     /// <returns>True if the description should be applied.</returns>
-    public bool AcceptRoom(uint decision) {
-        if (decision <= _latestRoom) {
+    public bool AcceptRoom(string scene) {
+        if (scene != _scene || _roomApplied) {
             return false;
         }
 
-        _latestRoom = decision;
+        _roomApplied = true;
         return true;
     }
 
     /// <summary>
-    /// Forget the decisions of the previous connection, because the server numbers each connection from the start.
+    /// Whether a scene host decision about the current room is not older than the ones applied so far. A change of
+    /// host always starts a new epoch, so it must be newer; a description of the room may repeat the current epoch.
     /// </summary>
-    public void Reset() => _latest = _latestRoom = 0;
+    /// <param name="scene">The scene the decision is about.</param>
+    /// <param name="epoch">The epoch of the decision.</param>
+    /// <param name="startsEpoch">Whether the decision is a change of host, which starts its epoch.</param>
+    /// <returns>True if the decision should be applied.</returns>
+    public bool AcceptRole(string scene, uint epoch, bool startsEpoch) {
+        if (scene != _scene || (startsEpoch ? epoch <= _roleEpoch : epoch < _roleEpoch)) {
+            return false;
+        }
+
+        _roleEpoch = epoch;
+        return true;
+    }
+
+    /// <summary>
+    /// Forget the decisions of the previous connection.
+    /// </summary>
+    public void Reset() {
+        _scene = null;
+        _roomApplied = false;
+        _roleEpoch = 0;
+    }
 }

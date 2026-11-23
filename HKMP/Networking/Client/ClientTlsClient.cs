@@ -13,7 +13,7 @@ namespace Hkmp.Networking.Client;
 /// authentication and checks server certificate.
 /// </summary>
 /// <param name="crypto">TlsCrypto instance for handling low-level cryptography.</param>
-internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
+internal class ClientTlsClient(TlsCrypto crypto, int handshakeTimeoutMillis) : AbstractTlsClient(crypto) {
     /// <summary>
     /// List of supported cipher suites on the client-side.
     /// </summary>
@@ -43,7 +43,7 @@ internal class ClientTlsClient(TlsCrypto crypto) : AbstractTlsClient(crypto) {
     /// </summary>
     /// <returns>The integer value of the timeout in milliseconds.</returns>
     public override int GetHandshakeTimeoutMillis() {
-        return DtlsClient.DtlsHandshakeTimeoutMillis;
+        return handshakeTimeoutMillis;
     }
 
     /// <inheritdoc />

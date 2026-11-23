@@ -7,6 +7,7 @@ using Hkmp.Math;
 using Hkmp.Networking.Packet;
 using Hkmp.Networking.Packet.Data;
 using Hkmp.Networking.Packet.Update;
+using Hkmp.Networking.Timing;
 
 namespace Hkmp.Networking.Server;
 
@@ -15,10 +16,12 @@ namespace Hkmp.Networking.Server;
 /// </summary>
 internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, ClientUpdatePacketId> {
     /// <summary>
-    /// The number of the latest scene host decision for this player. One counter per connection is enough, because
-    /// each client only has to order its own decisions, and it is taken under the lock that orders them.
+    /// Construct the update manager with timers from the given factory.
     /// </summary>
-    private uint _roleDecision;
+    /// <param name="timers">Creates the timers; on the server they run on its core.</param>
+    /// <param name="timeouts">The deadlines of the connection.</param>
+    public ServerUpdateManager(IUpdateTimerFactory timers, ConnectionTimeouts timeouts) : base(timers, timeouts) {
+    }
 
     /// <summary>
     /// Find or create a packet data instance in the current packet that matches the given ID of a client.
@@ -189,6 +192,7 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="sceneHost">Whether the player is the scene host.</param>
     /// <param name="epoch">The room's current epoch.</param>
     /// <param name="deadEntities">The entities of the room the server recorded as dead.</param>
+    /// <param name="sceneName">The scene the packet describes.</param>
     public void AddPlayerAlreadyInSceneData(
         IEnumerable<ClientPlayerEnterScene> playerEnterSceneList,
         IEnumerable<EntitySpawn> entitySpawnList = null,
@@ -196,14 +200,15 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
         IEnumerable<ReliableEntityUpdate> reliableEntityUpdateList = null,
         bool sceneHost = false,
         uint epoch = 0,
-        List<ushort> deadEntities = null
+        IReadOnlyList<EntityLife> deadEntities = null,
+        string sceneName = ""
     ) {
         lock (Lock) {
             var alreadyInScene = new ClientPlayerAlreadyInScene {
+                SceneName = sceneName,
                 SceneHost = sceneHost,
-                RoleDecision = ++_roleDecision,
                 Epoch = epoch,
-                DeadEntities = deadEntities ?? new List<ushort>()
+                DeadEntities = deadEntities ?? new List<EntityLife>()
             };
             alreadyInScene.PlayerEnterSceneList.AddRange(playerEnterSceneList);
 
@@ -438,10 +443,12 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="isActive">Whether the entity is active or not.</param>
     /// <param name="epoch">The room's epoch in which the scene host wrote it.</param>
-    public void UpdateEntityIsActive(ushort entityId, bool isActive, uint epoch) {
+    /// <param name="life">The life of the entity in which the scene host wrote it.</param>
+    public void UpdateEntityIsActive(ushort entityId, bool isActive, uint epoch, ushort life) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
             entityUpdate.Epoch = epoch;
+            entityUpdate.Life = life;
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Active);
             entityUpdate.IsActive = isActive;
@@ -454,10 +461,12 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="data">The list of entity network data to add.</param>
     /// <param name="epoch">The room's epoch in which the scene host wrote it.</param>
-    public void AddEntityData(ushort entityId, List<EntityNetworkData> data, uint epoch) {
+    /// <param name="life">The life of the entity in which the scene host wrote it.</param>
+    public void AddEntityData(ushort entityId, List<EntityNetworkData> data, uint epoch, ushort life) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
             entityUpdate.Epoch = epoch;
+            entityUpdate.Life = life;
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Data);
             entityUpdate.GenericData.AddRange(data);
@@ -471,10 +480,12 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="fsmIndex">The index of the FSM of the entity.</param>
     /// <param name="data">The host FSM data to add.</param>
     /// <param name="epoch">The room's epoch in which the scene host wrote it.</param>
-    public void AddEntityHostFsmData(ushort entityId, byte fsmIndex, EntityHostFsmData data, uint epoch) {
+    /// <param name="life">The life of the entity in which the scene host wrote it.</param>
+    public void AddEntityHostFsmData(ushort entityId, byte fsmIndex, EntityHostFsmData data, uint epoch, ushort life) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
             entityUpdate.Epoch = epoch;
+            entityUpdate.Life = life;
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.HostFsm);
 
@@ -493,12 +504,11 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
     /// <param name="isHost">False when the player loses the role instead.</param>
     /// <param name="epoch">The room's epoch the change of host starts.</param>
     /// <param name="deadEntities">The entities of the room the server recorded as dead.</param>
-    public void SetSceneHostTransfer(string sceneName, bool isHost, uint epoch, List<ushort> deadEntities) {
+    public void SetSceneHostTransfer(string sceneName, bool isHost, uint epoch, IReadOnlyList<EntityLife> deadEntities) {
         lock (Lock) {
             CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.SceneHostTransfer, new HostTransfer {
                 SceneName = sceneName,
                 IsHost = isHost,
-                RoleDecision = ++_roleDecision,
                 Epoch = epoch,
                 DeadEntities = deadEntities
             });
@@ -606,6 +616,21 @@ internal class ServerUpdateManager : UdpUpdateManager<ClientUpdatePacket, Client
                     Reason = reason
                 }
             );
+        }
+    }
+
+    /// <summary>
+    /// Puts the round trip times of the players in the current packet, replacing any report not sent yet.
+    /// </summary>
+    /// <param name="pings">The id and round trip time of each player.</param>
+    public void SetPlayerPings(IEnumerable<(ushort Id, ushort Rtt)> pings) {
+        var packetDataCollection = new PacketDataCollection<PlayerPing>();
+        foreach (var (id, rtt) in pings) {
+            packetDataCollection.DataInstances.Add(new PlayerPing { Id = id, Rtt = rtt });
+        }
+
+        lock (Lock) {
+            CurrentUpdatePacket.SetSendingPacketData(ClientUpdatePacketId.PlayerPing, packetDataCollection);
         }
     }
 

@@ -52,7 +52,8 @@ internal class ClientConnectionManager : ConnectionManager {
     /// <param name="authKey">The authentication key of the player.</param>
     /// <param name="addonData">List of addon data that represents the enabled networked addons that the client uses.
     /// </param>
-    public void StartConnection(string username, string authKey, List<AddonData> addonData) {
+    /// <param name="sessionToken">The token of the session to take back, or empty for a new entry.</param>
+    public void StartConnection(string username, string authKey, List<AddonData> addonData, byte[] sessionToken) {
         Logger.Debug("StartConnection");
 
         // Create a connection packet that will be the entire chunk we will be sending
@@ -62,7 +63,8 @@ internal class ClientConnectionManager : ConnectionManager {
         connectionPacket.SetSendingPacketData(ServerConnectionPacketId.ClientInfo, new ClientInfo {
             Username = username,
             AuthKey = authKey,
-            AddonData = addonData
+            AddonData = addonData,
+            SessionToken = sessionToken ?? []
         });
 
         // Create the raw packet from the connection packet

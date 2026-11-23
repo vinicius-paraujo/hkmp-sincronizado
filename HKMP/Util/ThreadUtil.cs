@@ -1,23 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
+using Hkmp.Networking.Client.Connection;
 using UnityEngine;
 
 namespace Hkmp.Util;
 
 /// <summary>
-/// Class for utilities regarding threading.
+/// Drives the main thread mailbox from Unity's frame loop.
 /// </summary>
 internal class ThreadUtil : MonoBehaviour {
-    /// <summary>
-    /// Object to lock asynchronous access.
-    /// </summary>
-    private static readonly object Lock = new object();
-
-    /// <summary>
-    /// List of actions that need to be run on the Unity main thread.
-    /// </summary>
-    private static readonly List<Action> ActionsToRun = new List<Action>();
-
     /// <summary>
     /// Instantiate this static class.
     /// </summary>
@@ -32,21 +22,10 @@ internal class ThreadUtil : MonoBehaviour {
     /// </summary>
     /// <param name="action">The action to run.</param>
     public static void RunActionOnMainThread(Action action) {
-        lock (Lock) {
-            ActionsToRun.Add(action);
-        }
+        MainThreadMailbox.Shared.Post(action);
     }
 
     public void Update() {
-        List<Action> actions;
-
-        lock (Lock) {
-            actions = new List<Action>(ActionsToRun);
-            ActionsToRun.Clear();
-        }
-
-        foreach (var action in actions) {
-            action.Invoke();
-        }
+        MainThreadMailbox.Shared.Drain();
     }
 }

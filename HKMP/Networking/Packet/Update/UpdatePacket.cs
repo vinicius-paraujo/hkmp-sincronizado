@@ -36,6 +36,32 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// Resend addon packet data indexed by sequence number it originates from.
     /// </summary>
     protected readonly Dictionary<ushort, Dictionary<byte, AddonPacketData>> ResendAddonPacketData;
+
+    private readonly List<(TPacketId PacketId, IPacketData Data)> _earlierResentData = new();
+    private readonly List<(byte AddonId, byte PacketId, IPacketData Data)> _earlierResentAddonData = new();
+
+    /// <summary>
+    /// Resent data whose ID this packet already carries newer data for, and that must still reach its handler
+    /// once. It is older than the data of <see cref="BasePacket{TPacketId}.GetPacketData"/>, so it goes first.
+    /// </summary>
+    public IReadOnlyList<(TPacketId PacketId, IPacketData Data)> GetEarlierResentData() {
+        if (!IsAllPacketDataCached) {
+            CacheAllPacketData();
+        }
+
+        return _earlierResentData;
+    }
+
+    /// <summary>
+    /// The addon counterpart of <see cref="GetEarlierResentData"/>.
+    /// </summary>
+    public IReadOnlyList<(byte AddonId, byte PacketId, IPacketData Data)> GetEarlierResentAddonData() {
+        if (!IsAllPacketDataCached) {
+            CacheAllPacketData();
+        }
+
+        return _earlierResentAddonData;
+    }
     
     protected UpdatePacket() {
         AckField = new bool[UdpUpdateManager.AckSize];
@@ -293,44 +319,51 @@ internal abstract class UpdatePacket<TPacketId> : BasePacket<TPacketId> where TP
     /// <inheritdoc />
     protected override void CacheAllPacketData() {
         base.CacheAllPacketData();
-        
+        _earlierResentData.Clear();
+        _earlierResentAddonData.Clear();
+
+        // Resent data goes into the slot of its ID. When the slot is taken, a collection takes the resent instances
+        // in; data that a newer version replaces is dropped; any other data was sent once and is handed over on its
+        // own, because the other side confirms the lost packet together with this one.
         void AddResendData<TKey>(
             Dictionary<TKey, IPacketData> dataDict,
-            Dictionary<TKey, IPacketData> cachedData
+            Dictionary<TKey, IPacketData> cachedData,
+            Action<TKey, IPacketData> keepApart
         ) {
             foreach (var packetIdDataPair in dataDict) {
-                // Get the ID and the data itself
                 var packetId = packetIdDataPair.Key;
                 var packetData = packetIdDataPair.Value;
 
-                // Check whether for this ID there already exists data
-                if (cachedData.TryGetValue(packetId, out var existingPacketData)) {
-                    // If the existing data is a PacketDataCollection, we can simply add all the data instance to it
-                    // If not, we simply discard the resent data, since it is older
-                    if (existingPacketData is RawPacketDataCollection existingPacketDataCollection
-                        && packetData is RawPacketDataCollection packetDataCollection) {
-                        existingPacketDataCollection.DataInstances.AddRange(packetDataCollection.DataInstances);
-                    }
-                } else {
-                    // If no data exists for this ID, we can simply set the resent data for that key
+                if (!cachedData.TryGetValue(packetId, out var existingPacketData)) {
                     cachedData[packetId] = packetData;
+                } else if (existingPacketData is RawPacketDataCollection existingPacketDataCollection
+                           && packetData is RawPacketDataCollection packetDataCollection) {
+                    existingPacketDataCollection.DataInstances.AddRange(packetDataCollection.DataInstances);
+                } else if (!packetData.DropReliableDataIfNewerExists) {
+                    keepApart(packetId, packetData);
                 }
             }
         }
-        
-        // Iteratively add the resent packet data, but make sure to merge it with existing data
+
         foreach (var resentPacketData in ResendPacketData.Values) {
-            AddResendData(resentPacketData, CachedAllPacketData);
+            AddResendData(
+                resentPacketData,
+                CachedAllPacketData,
+                (packetId, packetData) => _earlierResentData.Add((packetId, packetData))
+            );
         }
-        
-        // Iteratively add the resent addon data, but make sure to merge it with existing data
+
         foreach (var resentAddonData in ResendAddonPacketData.Values) {
             foreach (var addonIdDataPair in resentAddonData) {
                 var addonId = addonIdDataPair.Key;
                 var addonPacketData = addonIdDataPair.Value;
 
                 if (CachedAllAddonData.TryGetValue(addonId, out var existingAddonPacketData)) {
-                    AddResendData(addonPacketData.PacketData, existingAddonPacketData.PacketData);
+                    AddResendData(
+                        addonPacketData.PacketData,
+                        existingAddonPacketData.PacketData,
+                        (packetId, packetData) => _earlierResentAddonData.Add((addonId, packetId, packetData))
+                    );
                 } else {
                     CachedAllAddonData[addonId] = addonPacketData;
                 }

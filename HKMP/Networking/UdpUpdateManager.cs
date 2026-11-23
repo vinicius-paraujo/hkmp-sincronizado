@@ -1,12 +1,11 @@
 using System;
-using System.Timers;
 using Hkmp.Concurrency;
 using Hkmp.Logging;
 using Hkmp.Networking.Packet;
 using Hkmp.Networking.Packet.Data;
 using Hkmp.Networking.Packet.Update;
+using Hkmp.Networking.Timing;
 using Org.BouncyCastle.Tls;
-using Timer = System.Timers.Timer;
 
 namespace Hkmp.Networking;
 
@@ -25,19 +24,6 @@ internal abstract class UdpUpdateManager {
 internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManager
     where TOutgoing : UpdatePacket<TPacketId>, new()
     where TPacketId : Enum {
-    /// <summary>
-    /// The time in milliseconds to disconnect after not receiving any updates. Players often connect through
-    /// tunnels that stall for several seconds and then recover, so a short pause must not end the session.
-    /// </summary>
-    private const int ConnectionTimeout = 30000;
-
-    /// <summary>
-    /// The time in milliseconds without updates after which the other side counts as stalled. It is the old
-    /// disconnect limit: long enough to ignore ordinary jitter, short enough that a stalled scene host is replaced
-    /// before the room visibly freezes for the other players.
-    /// </summary>
-    private const int SilenceTimeout = 5000;
-
     /// <summary>
     /// The MTU (maximum transfer unit) to use to send packets with. If the length of a packet exceeds this, we break
     /// it up into smaller packets before sending. This ensures that we control the breaking of packets in most
@@ -90,6 +76,12 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     private ushort _remoteSequence;
 
     /// <summary>
+    /// Whether a packet arrived on this channel yet. The first one sets the remote sequence, because the other side
+    /// may go on with numbering it already had: a client that takes its session back keeps counting.
+    /// </summary>
+    private bool _remoteKnown;
+
+    /// <summary>
     /// Fixed-size queue containing sequence numbers that have been received.
     /// </summary>
     private ConcurrentFixedSizeQueue<ushort> _receivedQueue;
@@ -119,17 +111,17 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Timer for keeping track of when to send an update packet.
     /// </summary>
-    private readonly Timer _sendTimer;
+    private readonly IUpdateTimer _sendTimer;
 
     /// <summary>
     /// Timer for keeping track of the connection timing out.
     /// </summary>
-    private readonly Timer _heartBeatTimer;
+    private readonly IUpdateTimer _heartBeatTimer;
 
     /// <summary>
     /// Timer for noticing that the other side went silent, well before the connection times out.
     /// </summary>
-    private readonly Timer _silenceTimer;
+    private readonly IUpdateTimer _silenceTimer;
 
     /// <summary>
     /// Whether the silence event was raised and no packet has arrived since.
@@ -168,7 +160,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public event Action TimeoutEvent;
 
     /// <summary>
-    /// Event that is called when no update has arrived for <see cref="SilenceTimeout"/> milliseconds.
+    /// Event that is called when no update has arrived for the silence deadline of the connection.
     /// </summary>
     public event Action SilenceEvent;
 
@@ -178,9 +170,21 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     public event Action ResumeEvent;
 
     /// <summary>
-    /// Construct the update manager with a UDP socket.
+    /// Construct the update manager with timers on the thread pool.
     /// </summary>
-    protected UdpUpdateManager() {
+    protected UdpUpdateManager() : this(SystemUpdateTimerFactory.Instance, ConnectionTimeouts.Default) {
+    }
+
+    /// <summary>
+    /// Construct the update manager with timers from the given factory.
+    /// </summary>
+    /// <param name="timers">Creates the send, heartbeat and silence timers.</param>
+    /// <param name="timeouts">
+    /// The deadlines of the connection. The drop deadline is long because players often connect through paths that
+    /// stall for several seconds and then recover; the silence deadline is short enough that a stalled scene host is
+    /// replaced before the room visibly freezes for the other players.
+    /// </param>
+    protected UdpUpdateManager(IUpdateTimerFactory timers, ConnectionTimeouts timeouts) {
         _udpCongestionManager = new UdpCongestionManager<TOutgoing, TPacketId>(this);
 
         _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
@@ -189,22 +193,13 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         CurrentUpdatePacket = new TOutgoing();
 
         // Construct the timers with correct intervals and register the Elapsed events
-        _sendTimer = new Timer {
-            AutoReset = true,
-            Interval = CurrentSendRate
-        };
+        _sendTimer = timers.Create(CurrentSendRate, true);
         _sendTimer.Elapsed += OnSendTimerElapsed;
 
-        _heartBeatTimer = new Timer {
-            AutoReset = false,
-            Interval = ConnectionTimeout
-        };
+        _heartBeatTimer = timers.Create((int) timeouts.Drop.TotalMilliseconds, false);
         _heartBeatTimer.Elapsed += OnHeartBeatTimerElapsed;
 
-        _silenceTimer = new Timer {
-            AutoReset = false,
-            Interval = SilenceTimeout
-        };
+        _silenceTimer = timers.Create((int) timeouts.Silence.TotalMilliseconds, false);
         _silenceTimer.Elapsed += OnSilenceTimerElapsed;
     }
 
@@ -217,14 +212,97 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         // numbers here would make every acknowledgement point at packets the server never sent.
         lock (Lock) {
             _localSequence = 0;
-            _remoteSequence = 0;
-            _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
-            _resentQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+            ForgetRemote();
             _pendingResends.Clear();
             _udpCongestionManager.Reset();
             CurrentUpdatePacket = new TOutgoing();
         }
 
+        StartTimers();
+    }
+
+    /// <summary>
+    /// Starts sending again over a new connection of the same session. The channel belongs to the session, so it
+    /// goes on: what the old connection carried and nobody confirmed is resent, and the numbering continues, so the
+    /// other side still recognises the data it already handled.
+    /// </summary>
+    public void ResumeUpdates() {
+        lock (_sendLock) {
+            lock (Lock) {
+                _udpCongestionManager.HandOverUnconfirmed();
+            }
+        }
+
+        StartTimers();
+    }
+
+    /// <summary>
+    /// The server ended the session and the player entered again as new on this connection. The other side keeps
+    /// nothing of the old session, so its reliable data is dropped and the remote side starts over; the local
+    /// numbering goes on, as the server already follows it.
+    /// </summary>
+    public void ForgetSession() {
+        lock (_sendLock) {
+            lock (Lock) {
+                ForgetRemote();
+                _pendingResends.Clear();
+                _udpCongestionManager.Reset();
+                CurrentUpdatePacket = new TOutgoing();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Takes over the channel of the session from the connection a resumption replaced, which must be stopped. The
+    /// numbering, the record of what arrived and the data waiting for confirmation come from it; what this
+    /// connection exchanged so far is only the connection phase, whose slices are confirmed apart.
+    /// </summary>
+    /// <param name="previous">The update manager of the replaced connection.</param>
+    public void AdoptChannelFrom(UdpUpdateManager<TOutgoing, TPacketId> previous) {
+        lock (previous._sendLock) {
+            lock (previous.Lock) {
+                previous._udpCongestionManager.HandOverUnconfirmed();
+
+                lock (_sendLock) {
+                    lock (Lock) {
+                        _localSequence = previous._localSequence;
+
+                        // The client went on counting during the connection phase, so the newer remote sequence
+                        // of the two is the one to acknowledge.
+                        if (previous._remoteKnown
+                            && (!_remoteKnown || IsSequenceGreaterThan(previous._remoteSequence, _remoteSequence))) {
+                            _remoteSequence = previous._remoteSequence;
+                            _remoteKnown = true;
+                        }
+
+                        _receivedQueue = Merged(previous._receivedQueue, _receivedQueue);
+                        _resentQueue = Merged(previous._resentQueue, _resentQueue);
+                        _pendingResends.TakeFrom(previous._pendingResends);
+                        _udpCongestionManager.Reset();
+                    }
+                }
+            }
+        }
+    }
+
+    private void ForgetRemote() {
+        _remoteSequence = 0;
+        _remoteKnown = false;
+        _receivedQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+        _resentQueue = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+    }
+
+    private static ConcurrentFixedSizeQueue<ushort> Merged(
+        ConcurrentFixedSizeQueue<ushort> older,
+        ConcurrentFixedSizeQueue<ushort> newer
+    ) {
+        var merged = new ConcurrentFixedSizeQueue<ushort>(ReceiveQueueSize);
+        foreach (var sequence in older.GetCopy()) merged.Enqueue(sequence);
+        foreach (var sequence in newer.GetCopy()) merged.Enqueue(sequence);
+        return merged;
+    }
+
+    private void StartTimers() {
         _lastSendRate = CurrentSendRate;
         _sendTimer.Start();
         _heartBeatTimer.Start();
@@ -257,14 +335,43 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Callback method for when a packet is received.
     /// </summary>
-    /// <param name="packet"></param>
-    /// <typeparam name="TIncoming"></typeparam>
-    /// <typeparam name="TOtherPacketId"></typeparam>
-    public void OnReceivePacket<TIncoming, TOtherPacketId>(TIncoming packet)
+    /// <param name="packet">The packet.</param>
+    /// <param name="delivered">Whether the packet's data reaches its handlers. A packet that does not is never
+    /// confirmed, so its sender sends the reliable data in it again; it still shows that the connection is alive.
+    /// </param>
+    /// <typeparam name="TIncoming">The type of the packet.</typeparam>
+    /// <typeparam name="TOtherPacketId">The type of the IDs of the packet's data.</typeparam>
+    public void OnReceivePacket<TIncoming, TOtherPacketId>(TIncoming packet, bool delivered = true)
         where TIncoming : UpdatePacket<TOtherPacketId>
         where TOtherPacketId : Enum {
         _udpCongestionManager.OnReceivePackets<TIncoming, TOtherPacketId>(packet);
 
+        if (delivered) {
+            Acknowledge<TIncoming, TOtherPacketId>(packet);
+        }
+
+        // Reset the heart beat timer, as we have received a packet and the connection is alive
+        _heartBeatTimer.Stop();
+        _heartBeatTimer.Start();
+        _silenceTimer.Stop();
+        _silenceTimer.Start();
+
+        if (_silent) {
+            _silent = false;
+            ResumeEvent?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Records the packet as received, so the next acknowledgement confirms it, and drops the data in it that was
+    /// already handled.
+    /// </summary>
+    /// <param name="packet">The packet.</param>
+    /// <typeparam name="TIncoming">The type of the packet.</typeparam>
+    /// <typeparam name="TOtherPacketId">The type of the IDs of the packet's data.</typeparam>
+    private void Acknowledge<TIncoming, TOtherPacketId>(TIncoming packet)
+        where TIncoming : UpdatePacket<TOtherPacketId>
+        where TOtherPacketId : Enum {
         // Get the sequence number from the packet and add it to the receive queue
         var sequence = packet.Sequence;
         _receivedQueue.Enqueue(sequence);
@@ -283,19 +390,9 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
         }
 
         // Update the latest remote sequence number if applicable
-        if (IsSequenceGreaterThan(sequence, _remoteSequence)) {
+        if (!_remoteKnown || IsSequenceGreaterThan(sequence, _remoteSequence)) {
             _remoteSequence = sequence;
-        }
-
-        // Reset the heart beat timer, as we have received a packet and the connection is alive
-        _heartBeatTimer.Stop();
-        _heartBeatTimer.Start();
-        _silenceTimer.Stop();
-        _silenceTimer.Start();
-
-        if (_silent) {
-            _silent = false;
-            ResumeEvent?.Invoke();
+            _remoteKnown = true;
         }
     }
 
@@ -375,7 +472,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// Callback method for when the send timer elapses. Will create and send a new update packet and update the
     /// timer interval in case the send rate changes.
     /// </summary>
-    private void OnSendTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
+    private void OnSendTimerElapsed() {
         CreateAndSendUpdatePacket();
 
         if (_lastSendRate != CurrentSendRate) {
@@ -387,7 +484,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Callback method for when the heart beat timer elapses. Will invoke the timeout event.
     /// </summary>
-    private void OnHeartBeatTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
+    private void OnHeartBeatTimerElapsed() {
         // The timer has surpassed the connection timeout value, so we call the timeout event
         TimeoutEvent?.Invoke();
     }
@@ -395,7 +492,7 @@ internal abstract class UdpUpdateManager<TOutgoing, TPacketId> : UdpUpdateManage
     /// <summary>
     /// Callback method for when the silence timer elapses. Will invoke the silence event once per silence.
     /// </summary>
-    private void OnSilenceTimerElapsed(object sender, ElapsedEventArgs elapsedEventArgs) {
+    private void OnSilenceTimerElapsed() {
         _silent = true;
         SilenceEvent?.Invoke();
     }

@@ -19,10 +19,18 @@ internal class DtlsClient {
     public const int MaxPacketSize = 1400;
 
     /// <summary>
-    /// The maximum time the DTLS handshake can take in milliseconds before timing out. A tunnel adds round
-    /// trips and occasional stalls to every handshake flight.
+    /// The maximum time the DTLS handshake can take before the attempt fails; the server gives up on it first, so
+    /// the place it held is free again when the client tries anew.
     /// </summary>
-    public const int DtlsHandshakeTimeoutMillis = 15000;
+    private readonly TimeSpan _handshakeTimeout;
+
+    /// <summary>
+    /// Creates a client whose handshakes fail after the given time.
+    /// </summary>
+    /// <param name="handshakeTimeout">The longest a handshake may take.</param>
+    public DtlsClient(TimeSpan handshakeTimeout) {
+        _handshakeTimeout = handshakeTimeout;
+    }
 
     /// <summary>
     /// The socket instance for the underlying networking.
@@ -82,7 +90,7 @@ internal class DtlsClient {
         }
         
         var clientProtocol = new DtlsClientProtocol();
-        _tlsClient = new ClientTlsClient(new BcTlsCrypto());
+        _tlsClient = new ClientTlsClient(new BcTlsCrypto(), (int) _handshakeTimeout.TotalMilliseconds);
         _clientDatagramTransport = new ClientDatagramTransport(_socket);
         
         // Create the token source, because we need the token for the receive loop

@@ -112,6 +112,32 @@ internal class ClientManager : IClientManager {
     private readonly Dictionary<ushort, ClientPlayerData> _playerData;
 
     /// <summary>
+    /// The last round trip time the server reported for each player, by id.
+    /// </summary>
+    private readonly Dictionary<ushort, ushort> _playerPings = new();
+
+    /// <summary>
+    /// Whether the game's hooks are registered.
+    /// </summary>
+    private bool _hooksRegistered;
+
+    /// <summary>
+    /// The rows of the player list: the local player first with its own round trip time, then the others by name with
+    /// the time the server last reported for them, or none before the first report.
+    /// </summary>
+    /// <returns>The name and round trip time of each connected player.</returns>
+    internal List<(string Name, int? Ping)> PlayerListEntries() {
+        var entries = new List<(string Name, int? Ping)> { (_username, _netClient.UpdateManager.AverageRtt) };
+        var others = new List<ClientPlayerData>(_playerData.Values);
+        others.Sort((a, b) => string.Compare(a.Username, b.Username, StringComparison.OrdinalIgnoreCase));
+        foreach (var player in others) {
+            entries.Add((player.Username, _playerPings.TryGetValue(player.Id, out var rtt) ? rtt : null));
+        }
+
+        return entries;
+    }
+
+    /// <summary>
     /// Whether we are automatically connected to an in-game hosted server.
     /// This is used to determine whether to apply save data from the server to the client and warp them to a bench.
     /// </summary>
@@ -216,6 +242,15 @@ internal class ClientManager : IClientManager {
     public event Action ConnectionResumedEvent;
 
     /// <inheritdoc />
+    public event Action<ConnectionState> ConnectionStateChanged;
+
+    /// <inheritdoc />
+    public ConnectionState ConnectionState => _netClient.State;
+
+    /// <inheritdoc />
+    public int ResumeAttempts => _netClient.ResumeAttempts;
+
+    /// <inheritdoc />
     public bool StayInGameOnTimeout { get; set; }
 
     /// <inheritdoc />
@@ -251,6 +286,7 @@ internal class ClientManager : IClientManager {
         _netClient = netClient;
         _packetManager = packetManager;
         _uiManager = uiManager;
+        _uiManager.PlayerListSource = PlayerListEntries;
         _serverSettings = serverSettings;
         _modSettings = modSettings;
 
@@ -307,15 +343,11 @@ internal class ClientManager : IClientManager {
         // Register handlers for events from UI
         _uiManager.RequestClientConnectEvent += (address, port, username, autoConnect) => {
             _autoConnect = autoConnect;
+            // A connection the player asks for enters anew; only a reconnection takes the old session back.
+            _netClient.ForgetSession();
             Connect(address, port, username);
         };
         _uiManager.RequestClientDisconnectEvent += Disconnect;
-        _uiManager.RequestServerStartHostEvent += _ => {
-            _saveManager.IsHostingServer = true;
-        };
-        _uiManager.RequestServerStopHostEvent += () => {
-            _saveManager.IsHostingServer = false;
-        };
 
         UiManager.InternalChatBox.ChatInputEvent += OnChatInput;
 
@@ -327,12 +359,21 @@ internal class ClientManager : IClientManager {
         _netClient.TimeoutEvent += OnTimeout;
         _netClient.StalledEvent += () => ConnectionStalledEvent?.Invoke();
         _netClient.ResumedEvent += () => ConnectionResumedEvent?.Invoke();
+        _netClient.TransportReplacedEvent += OnTransportReplaced;
+        _netClient.StateChangedEvent += state => ConnectionStateChanged?.Invoke(state);
     }
 
     /// <summary>
     /// Register the hooks of the client manager and the internal instances.
     /// </summary>
     private void RegisterHooks() {
+        // A session taken back keeps the hooks it had, so its connect callback finds them registered already.
+        if (_hooksRegistered) {
+            return;
+        }
+
+        _hooksRegistered = true;
+
         // Have internal components register their hooks
         _playerManager.RegisterHooks();
         _animationManager.RegisterHooks();
@@ -361,6 +402,8 @@ internal class ClientManager : IClientManager {
     /// Deregister the hooks of the client manager and the internal instances.
     /// </summary>
     private void DeregisterHooks() {
+        _hooksRegistered = false;
+
         // Have internal components deregister their hooks
         _playerManager.DeregisterHooks();
         _animationManager.DeregisterHooks();
@@ -436,6 +479,10 @@ internal class ClientManager : IClientManager {
             ClientUpdatePacketId.ChatMessage,
             OnChatMessage
         );
+        _packetManager.RegisterClientUpdatePacketHandler<PlayerPing>(
+            ClientUpdatePacketId.PlayerPing,
+            ping => _playerPings[ping.Id] = ping.Rtt
+        );
         _packetManager.RegisterClientUpdatePacketHandler<ClientPlayerSettingUpdate>(
             ClientUpdatePacketId.PlayerSetting,
             OnPlayerSettingUpdate
@@ -486,6 +533,8 @@ internal class ClientManager : IClientManager {
         _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.ChatMessage);
         _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.PlayerSetting);
         _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.PlayerDeath);
+        _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.PlayerPing);
+        _playerPings.Clear();
 
         if (_fullSynchronisation) {
             _packetManager.DeregisterClientUpdatePacketHandler(ClientUpdatePacketId.EntitySpawn);
@@ -526,15 +575,50 @@ internal class ClientManager : IClientManager {
         );
     }
 
+    /// <summary>
+    /// Connects the player who hosts to the server on this machine. The game is not entered from here: hosting
+    /// loads the chosen save once the connection is up.
+    /// </summary>
+    /// <param name="port">The port of the server.</param>
+    /// <param name="username">The name of the player.</param>
+    internal void ConnectToOwnServer(int port, string username) {
+        _autoConnect = true;
+        _saveManager.IsHostingServer = true;
+        _netClient.ForgetSession();
+        Connect(UiManager.LocalhostAddress, port, username);
+    }
+
+    /// <summary>
+    /// Ends the connection of the player who hosts, as hosting is undone or the player leaves.
+    /// </summary>
+    internal void DisconnectFromOwnServer() {
+        Disconnect();
+        _saveManager.IsHostingServer = false;
+    }
+
     /// <inheritdoc />
     public void Disconnect() {
-        if (_netClient.IsConnected) {
-            // Send the server that we are disconnecting
-            Logger.Info("Sending PlayerDisconnect packet");
-            _netClient.UpdateManager.SetPlayerDisconnect();
-
+        // Leaving tells a connected server, cancels an attempt and acknowledges a failure alike.
+        if (_netClient.State != ConnectionState.Disconnected) {
             InternalDisconnect();
         }
+    }
+
+    /// <summary>
+    /// Drops everything tied to a connection that an attempt to take the session back is replacing. The game stays
+    /// where it is, with its hooks: among them is the one that keeps input working while the game is held still, which
+    /// the player needs to leave from the reconnection screen. The server's answer registers the packet handlers
+    /// again and applies its save in place. The ids of the addons stay: the server keeps the same order while it is
+    /// open, so an addon can go on sending, and its data waits in the session's channel for the new connection.
+    /// </summary>
+    private void OnTransportReplaced() {
+        Logger.Info("Replacing the silent connection to take the session back");
+        _playerManager.OnDisconnect();
+        _playerData.Clear();
+        DeregisterPacketHandlers();
+        _resyncOnConnect = true;
+        // Connecting from inside the game is what hosting does: no save selection, no scene load.
+        _autoConnect = true;
     }
 
     /// <summary>
@@ -646,6 +730,8 @@ internal class ClientManager : IClientManager {
     private void OnClientConnect(ServerInfo serverInfo) {
         Logger.Info("Received server info from server");
         _roleOrder.Reset();
+        // A reconnect stays in its room, which the server describes again for the new connection.
+        _roleOrder.EnterRoom(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
 
         // Update the locally stored server settings
         _serverSettings.SetAllProperties(serverInfo.ServerSettingsUpdate.ServerSettings);
@@ -814,7 +900,7 @@ internal class ClientManager : IClientManager {
     private void OnPlayerAlreadyInScene(ClientPlayerAlreadyInScene alreadyInScene) {
         Logger.Info("Received AlreadyInScene packet");
 
-        if (!_roleOrder.AcceptRoom(alreadyInScene.RoleDecision)) {
+        if (!_roleOrder.AcceptRoom(alreadyInScene.SceneName)) {
             Logger.Info("  Ignoring it, this room description is out of date");
             return;
         }
@@ -828,7 +914,7 @@ internal class ClientManager : IClientManager {
             _entityManager.ApplyRoomAuthority(alreadyInScene.Epoch, alreadyInScene.DeadEntities);
 
             // The rest of this packet describes the room and still applies when a newer decision got here first
-            if (!_roleOrder.Accept(alreadyInScene.RoleDecision)) {
+            if (!_roleOrder.AcceptRole(alreadyInScene.SceneName, alreadyInScene.Epoch, alreadyInScene.SceneHost)) {
                 Logger.Info("  Keeping the scene host role, a newer decision was already applied");
             } else if (alreadyInScene.SceneHost) {
                 // Notify the entity manager that we are scene host
@@ -1027,7 +1113,7 @@ internal class ClientManager : IClientManager {
 
         Logger.Info($"Received scene host transfer for scene: {hostTransfer.SceneName}");
 
-        if (!_roleOrder.Accept(hostTransfer.RoleDecision)) {
+        if (!_roleOrder.AcceptRole(hostTransfer.SceneName, hostTransfer.Epoch, true)) {
             Logger.Info("  Ignoring it, a newer scene host decision was already applied");
             return;
         }
@@ -1182,6 +1268,7 @@ internal class ClientManager : IClientManager {
     /// <param name="newScene">The new scene instance.</param>
     private void OnSceneChange(Scene oldScene, Scene newScene) {
         Logger.Info($"Scene changed from {oldScene.name} to {newScene.name}");
+        _roleOrder.EnterRoom(newScene.name);
         Logger.Debug($"  Current scene: {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}");
 
         // Always recycle existing players, because we changed scenes
@@ -1339,15 +1426,21 @@ internal class ClientManager : IClientManager {
     }
 
     /// <summary>
-    /// Callback method for when the net client is timed out.
+    /// Callback method for when a connection that was up is lost for good.
     /// </summary>
     private void OnTimeout() {
-        if (!_netClient.IsConnected) {
+        if (_netClient.State != ConnectionState.Failed) {
+            return;
+        }
+
+        // The player who hosts lost the connection to its own server; hosting undoes the session and shows why.
+        if (_saveManager.IsHostingServer) {
+            Logger.Info("Connection to the own server timed out, hosting ends");
             return;
         }
 
         if (StayInGameOnTimeout) {
-            Logger.Info("Connection to server timed out, staying in game to reconnect");
+            Logger.Info("Connection to server lost, leaving the way out to the addon that keeps the game");
             Disconnect();
             return;
         }
@@ -1361,20 +1454,6 @@ internal class ClientManager : IClientManager {
         Disconnect();
     }
 
-    /// <inheritdoc />
-    public void Reconnect() {
-        // An attempt still in progress finishes or fails on its own; starting another would race it.
-        if (_netClient.ConnectionStatus != ClientConnectionStatus.NotConnected || _lastAddress == null) {
-            return;
-        }
-
-        Logger.Info($"Reconnecting to {_lastAddress}:{_lastPort} as {_username}");
-        _resyncOnConnect = true;
-        Connect(_lastAddress, _lastPort, _username);
-        // Connecting from inside the game is what hosting does: no save selection, no scene load.
-        _autoConnect = true;
-    }
-
     /// <summary>
     /// Callback method for when the local user quits the application.
     /// </summary>
@@ -1383,9 +1462,7 @@ internal class ClientManager : IClientManager {
             return;
         }
 
-        // Send a disconnect packet before exiting the application
-        Logger.Debug("Sending PlayerDisconnect packet");
-        _netClient.UpdateManager.SetPlayerDisconnect();
+        // Leaving sends the disconnect packet before the application exits
         _netClient.Disconnect();
     }
 

@@ -20,5 +20,13 @@
   "addressMissing": "Enter the server address.",
   "portInvalid": "Enter a valid port.",
   "nameMissing": "Enter a player name.",
-  "nameTooLong": "This name is too long."
+  "nameTooLong": "This name is too long.",
+  "hostPortInUse": "Another program is using this port. Close it or choose another port.",
+  "hostPortUnavailable": "The server could not open this port. Choose another port.",
+  "hostServerFailed": "The server stopped because of an error. Host again.",
+  "hostLocalFailed": "Your game could not connect to your own server. Host again.",
+  "playerListTitle": "Players",
+  "playerListMore": "+{0} players",
+  "playerListOption": "Player list",
+  "playerListDescription": "Shows the connected players and their ping while the quick map is held"
 }

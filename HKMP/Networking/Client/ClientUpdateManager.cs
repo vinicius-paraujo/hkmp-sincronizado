@@ -1,3 +1,4 @@
+using System;
 using Hkmp.Animation;
 using Hkmp.Game;
 using Hkmp.Game.Client.Entity;
@@ -13,10 +14,34 @@ namespace Hkmp.Networking.Client;
 /// </summary>
 internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, ServerUpdatePacketId> {
     /// <summary>
+    /// Creates the update manager with the game's deadlines.
+    /// </summary>
+    public ClientUpdateManager() {
+    }
+
+    /// <summary>
+    /// Creates the update manager with the given deadlines.
+    /// </summary>
+    /// <param name="timeouts">The deadlines.</param>
+    public ClientUpdateManager(Timing.ConnectionTimeouts timeouts) : base(Timing.SystemUpdateTimerFactory.Instance, timeouts) {
+    }
+
+    /// <summary>
     /// The current room's epoch, stamped on every reliable entity update this client sends, so the server knows in
     /// which epoch the data was written even when it arrives after a change of scene host.
     /// </summary>
     public uint RoomEpoch { get; set; }
+
+    /// <summary>
+    /// The life an entity is in, stamped on every reliable entity update this client sends.
+    /// </summary>
+    public Func<ushort, ushort> LifeOf { get; set; }
+
+    /// <summary>
+    /// Starts the next life of an entity that this client knows to be dead and switched on again; returns the life
+    /// the entity is in afterwards.
+    /// </summary>
+    public Func<ushort, ushort> BeginLife { get; set; }
 
     /// <summary>
     /// Find an existing or create a new PlayerUpdate instance in the current update packet.
@@ -218,7 +243,8 @@ internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, Server
             } else {
                 entityUpdate = (T) (object) new ReliableEntityUpdate {
                     Id = entityId,
-                    Epoch = RoomEpoch
+                    Epoch = RoomEpoch,
+                    Life = LifeOf?.Invoke(entityId) ?? 0
                 };
             }
 
@@ -278,12 +304,16 @@ internal class ClientUpdateManager : UdpUpdateManager<ServerUpdatePacket, Server
     /// </summary>
     /// <param name="entityId">The ID of the entity.</param>
     /// <param name="isActive">Whether the entity is active or not.</param>
-    public void UpdateEntityIsActive(ushort entityId, bool isActive) {
+    /// <param name="startsLife">Whether the entity was switched on again by the game itself, which starts its next
+    /// life if it was dead.</param>
+    public void UpdateEntityIsActive(ushort entityId, bool isActive, bool startsLife = false) {
         lock (Lock) {
             var entityUpdate = FindOrCreateEntityUpdate<ReliableEntityUpdate>(entityId);
 
             entityUpdate.UpdateTypes.Add(EntityUpdateType.Active);
             entityUpdate.IsActive = isActive;
+            var life = startsLife ? BeginLife?.Invoke(entityId) : LifeOf?.Invoke(entityId);
+            entityUpdate.Life = life ?? 0;
         }
     }
     

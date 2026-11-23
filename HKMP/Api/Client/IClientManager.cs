@@ -39,10 +39,26 @@ public interface IClientManager {
     void Disconnect();
 
     /// <summary>
-    /// Whether a connection timeout keeps the player in the game instead of returning to the main menu, so the
-    /// caller can reconnect with <see cref="Reconnect"/>.
+    /// Whether a connection lost for good keeps the player in the game instead of returning to the main menu, so the
+    /// addon that set it can show the loss and lead the player out itself.
     /// </summary>
     bool StayInGameOnTimeout { get; set; }
+
+    /// <summary>
+    /// The state of the connection to the server. A silent server is taken back by the client itself, in
+    /// <see cref="Hkmp.Api.Client.ConnectionState.Resuming"/>.
+    /// </summary>
+    ConnectionState ConnectionState { get; }
+
+    /// <summary>
+    /// How many attempts to take the session back started since the server went silent.
+    /// </summary>
+    int ResumeAttempts { get; }
+
+    /// <summary>
+    /// Event that is called on the main thread after every change of <see cref="ConnectionState"/>.
+    /// </summary>
+    event Action<ConnectionState> ConnectionStateChanged;
 
     /// <summary>
     /// Whether the local player hosts the server it is connected to.
@@ -53,12 +69,6 @@ public interface IClientManager {
     /// Whether the local player simulates the entities of its current scene for the other players in it.
     /// </summary>
     bool IsSceneHost { get; }
-
-    /// <summary>
-    /// Connect again to the last server with the same username while staying in the game. The current save is
-    /// replaced by the server's when the connection is accepted.
-    /// </summary>
-    void Reconnect();
 
     /// <summary>
     /// Get a specific player by their ID.

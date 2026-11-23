@@ -98,4 +98,9 @@ internal enum ClientUpdatePacketId {
     /// Value in the save file has updated.
     /// </summary>
     SaveUpdate = 18,
+
+    /// <summary>
+    /// The round trip times of the players' connections.
+    /// </summary>
+    PlayerPing = 19,
 }

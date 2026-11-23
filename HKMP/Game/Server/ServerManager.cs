@@ -11,8 +11,11 @@ using Hkmp.Eventing.ServerEvents;
 using Hkmp.Game.Client.Entity.Component;
 using Hkmp.Game.Client.Save;
 using Hkmp.Game.Command.Server;
+using Hkmp.Game.Server.Core;
 using Hkmp.Game.Server.Auth;
+using Hkmp.Game.Server.Rooms;
 using Hkmp.Game.Server.Save;
+using Hkmp.Game.Server.Sessions;
 using Hkmp.Game.Settings;
 using Hkmp.Logging;
 using Hkmp.Networking;
@@ -20,6 +23,7 @@ using Hkmp.Networking.Packet;
 using Hkmp.Networking.Packet.Data;
 using Hkmp.Networking.Packet.Update;
 using Hkmp.Networking.Server;
+using Hkmp.Networking.Server.Lifecycle;
 using Hkmp.Util;
 
 namespace Hkmp.Game.Server;
@@ -82,6 +86,11 @@ internal abstract class ServerManager : IServerManager {
     /// The list of banned users.
     /// </summary>
     private readonly BanList _banList;
+
+    /// <summary>
+    /// Decides who enters and who takes a session back.
+    /// </summary>
+    private readonly AdmissionPolicy _admission;
 
     /// <summary>
     /// The server settings.
@@ -155,7 +164,17 @@ internal abstract class ServerManager : IServerManager {
     #region IServerManager properties
 
     /// <inheritdoc />
-    public IReadOnlyCollection<IServerPlayer> Players => new List<IServerPlayer>(_playerData.Values);
+    public IReadOnlyCollection<IServerPlayer> Players {
+        get {
+            _netServer.Guard.Check(nameof(Players));
+            return new List<IServerPlayer>(_playerData.Values);
+        }
+    }
+
+    /// <summary>
+    /// The thread that runs the server. Work that comes from other threads is handed to it.
+    /// </summary>
+    protected Hkmp.Game.Server.Core.ServerCore Core => _netServer.Core;
 
     /// <inheritdoc />
     public IServerSettings ServerSettings => InternalServerSettings;
@@ -181,9 +200,38 @@ internal abstract class ServerManager : IServerManager {
     #endregion
 
     /// <summary>
-    /// The server's authority over each room with players: its scene host in each epoch and its dead entities.
+    /// The only owner of each room's scene host, epochs and dead entities.
     /// </summary>
-    private readonly RoomAuthorities _rooms = new RoomAuthorities();
+    private readonly RoomHostAssignment _rooms;
+
+    /// <summary>
+    /// How often every player is told the round trip time of every player.
+    /// </summary>
+    private const int PingReportMillis = 2000;
+
+    /// <summary>
+    /// The timer of the ping report, on the core.
+    /// </summary>
+    private readonly CoreTimer _pingReport;
+
+    /// <summary>
+    /// The authentication key of whoever runs the server, whose client is preferred as scene host; null for a
+    /// server without a local player.
+    /// </summary>
+    protected string ServerOwnerKey { get; set; }
+
+    /// <summary>
+    /// The state of the server's lifecycle.
+    /// </summary>
+    public ServerState LifecycleState => _netServer.State;
+
+    /// <summary>
+    /// Called on the core whenever the server's lifecycle publishes its state, with the reason of a failure.
+    /// </summary>
+    public event Action<ServerState, ServerFailure> LifecycleChanged {
+        add => _netServer.LifecycleChanged += value;
+        remove => _netServer.LifecycleChanged -= value;
+    }
 
     /// <summary>
     /// Constructs the server manager.
@@ -201,11 +249,18 @@ internal abstract class ServerManager : IServerManager {
         InternalServerSettings = serverSettings;
         _playerData = new ConcurrentDictionary<ushort, ServerPlayerData>();
         _entityData = new ConcurrentDictionary<ServerEntityKey, ServerEntityData>();
+        _rooms = new RoomHostAssignment(new HostCandidatePolicy(
+            id => _silentPlayers.ContainsKey(id),
+            id => ServerOwnerKey != null && _playerData.TryGetValue(id, out var player) && player.AuthKey == ServerOwnerKey
+        ));
+
+        _pingReport = new CoreTimer(_netServer.Core, PingReportMillis, true);
+        _pingReport.Elapsed += ReportPings;
 
         CommandManager = new ServerCommandManager();
         var eventAggregator = new EventAggregator();
 
-        var serverApi = new ServerApi(this, CommandManager, _netServer, eventAggregator);
+        var serverApi = new ServerApi(this, CommandManager, _netServer, eventAggregator, _netServer.Core);
         AddonManager = new ServerAddonManager(serverApi);
 
         ServerSaveData = new ServerSaveData();
@@ -214,7 +269,8 @@ internal abstract class ServerManager : IServerManager {
         _whiteList = WhiteList.LoadFromFile();
         _authorizedList = AuthKeyList.LoadFromFile(AuthorizedFileName);
         _banList = BanList.LoadFromFile();
-        
+        _admission = new AdmissionPolicy(new AdmissionRules(this));
+
         _listCommand = new ListCommand(this);
         _whiteListCommand = new WhiteListCommand(_whiteList, this);
         _authorizeCommand = new AuthorizeCommand(_authorizedList, this);
@@ -242,6 +298,35 @@ internal abstract class ServerManager : IServerManager {
 
         // Register a handler for when a client wants to connect
         _netServer.ConnectionRequestEvent += OnConnectionRequest;
+        _netServer.ResumptionRequestEvent += OnResumptionRequest;
+        _netServer.SessionResumedEvent += OnSessionResumed;
+    }
+
+    /// <summary>
+    /// The facts of this server that the admission policy decides on.
+    /// </summary>
+    private sealed class AdmissionRules : IAdmissionRules {
+        private readonly ServerManager _server;
+
+        public AdmissionRules(ServerManager server) {
+            _server = server;
+        }
+
+        public bool IsKeyBanned(string identity) => _server._banList.Contains(identity);
+
+        public bool IsAddressBanned(string address) => _server._banList.IsIpBanned(address);
+
+        public bool WhitelistEnabled => _server._whiteList.IsEnabled;
+
+        public bool IsWhitelisted(string identity) => _server._whiteList.Contains(identity);
+
+        public bool IsPreListed(string username) => _server._whiteList.IsPreListed(username);
+
+        public bool IsNameInUse(string username) => _server._playerData.Values.Any(
+            player => string.Equals(player.Username, username, StringComparison.OrdinalIgnoreCase)
+        );
+
+        public bool HasLiveSession(string identity) => _server._netServer.HasLiveSession(identity);
     }
 
     /// <summary>
@@ -373,8 +458,17 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="port">The port the server should run on.</param>
     /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
     public virtual void Start(int port, bool fullSynchronisation) {
-        // Stop existing server
-        if (_netServer.IsStarted) {
+        Core.Invoke(() => StartOnCore(port, fullSynchronisation));
+    }
+
+    /// <summary>
+    /// Starts the server, on the core thread.
+    /// </summary>
+    /// <param name="port">The port the server should run on.</param>
+    /// <param name="fullSynchronisation">Whether full synchronisation should be enabled.</param>
+    private void StartOnCore(int port, bool fullSynchronisation) {
+        // Stop existing server, whether it runs or failed
+        if (_netServer.State != ServerState.Stopped) {
             Logger.Info("Server was running, shutting it down before starting");
             // The full stop also deregisters the commands and handlers, which are registered again below and
             // refuse to be registered twice
@@ -388,21 +482,41 @@ internal abstract class ServerManager : IServerManager {
 
         // Start server again with given port
         _netServer.Start(port);
+        _pingReport.Start();
+    }
+
+    /// <summary>
+    /// Tells every player the round trip time of every player. Runs on the core.
+    /// </summary>
+    private void ReportPings() {
+        var pings = _netServer.PingsOfAllClients().FindAll(ping => _playerData.ContainsKey(ping.Id));
+        foreach (var ping in pings) {
+            _netServer.GetUpdateManagerForClient(ping.Id)?.SetPlayerPings(pings);
+        }
     }
 
     /// <summary>
     /// Stops the currently running server.
     /// </summary>
     public void Stop() {
-        if (_netServer.IsStarted) {
+        Core.Invoke(StopOnCore);
+    }
+
+    /// <summary>
+    /// Stops the currently running server, on the core thread.
+    /// </summary>
+    private void StopOnCore() {
+        // A server that failed to open still has its commands and handlers registered
+        if (_netServer.State != ServerState.Stopped) {
             // Before shutting down, send TCP packets to all clients indicating
             // that the server is shutting down
             _netServer.SetDataForAllClients(updateManager => {
                 updateManager.SetDisconnect(DisconnectReason.Shutdown);
             });
 
+            _pingReport.Stop();
             _netServer.Stop();
-            
+
             DeregisterCommands();
             DeregisterPacketHandlers();
 
@@ -433,7 +547,7 @@ internal abstract class ServerManager : IServerManager {
     /// </summary>
     /// <param name="authKey">The authentication key to authorize.</param>
     public void AuthorizeKey(string authKey) {
-        _authorizedList.Add(authKey);
+        Core.Invoke(() => _authorizedList.Add(authKey));
     }
 
     /// <summary>
@@ -613,20 +727,20 @@ internal abstract class ServerManager : IServerManager {
                 reliableEntityUpdateList.Add(reliableEntityUpdate);
             }
 
-            if (!alreadyPlayersInScene) {
-                Logger.Debug($"No players already in scene, making {playerData.Id} the scene host");
-                playerData.IsSceneHost = true;
-            }
         }
 
         // A player without a scene yet has no room, and so no epoch nor deaths.
-        uint epoch = 0;
-        var deadEntities = new List<ushort>();
+        var entry = new RoomEntry(false, 0, new List<EntityLife>());
         if (!string.IsNullOrEmpty(playerData.CurrentScene)) {
-            var room = _rooms.For(playerData.CurrentScene);
-            epoch = FullSynchronisation && !alreadyPlayersInScene ? room.BeginHost(playerData.Id) : room.Epoch;
-            deadEntities = room.DeadEntities();
+            entry = _rooms.Enter(playerData.CurrentScene, playerData.Id, FullSynchronisation);
+            if (entry.IsHost) {
+                Logger.Debug($"No one hosts {playerData.CurrentScene}, making {playerData.Id} the scene host");
+            }
+
+            SyncHostFlags();
         }
+
+        var epoch = entry.Epoch;
 
         // The stored state is the room's present, so it carries the current epoch and no copy discards it as old.
         foreach (var update in reliableEntityUpdateList) {
@@ -638,9 +752,10 @@ internal abstract class ServerManager : IServerManager {
             entitySpawnList,
             entityUpdateList,
             reliableEntityUpdateList,
-            FullSynchronisation && !alreadyPlayersInScene,
+            entry.IsHost,
             epoch,
-            deadEntities
+            entry.Dead,
+            playerData.CurrentScene
         );
     }
 
@@ -797,7 +912,7 @@ internal abstract class ServerManager : IServerManager {
         }
 
         // If the player is not the scene host, ignore this data
-        if (!playerData.IsSceneHost) {
+        if (!_rooms.IsHost(playerData.CurrentScene, id)) {
             return;
         }
         
@@ -849,7 +964,7 @@ internal abstract class ServerManager : IServerManager {
         }
 
         // Only the scene host runs the room's entities; anything else is from a host that already lost the role.
-        if (!playerData.IsSceneHost) {
+        if (!_rooms.IsHost(playerData.CurrentScene, id)) {
             return;
         }
         
@@ -936,7 +1051,7 @@ internal abstract class ServerManager : IServerManager {
         // Only the scene host of the room's current epoch changes the room. An update written in an earlier epoch,
         // or by a player that does not host the room, describes a state that is no longer the room's, and would undo
         // what the current host did; only the deaths it reports still count, as facts.
-        if (!playerData.IsSceneHost || entityUpdate.Epoch != _rooms.For(playerData.CurrentScene).Epoch) {
+        if (!_rooms.IsHost(playerData.CurrentScene, id) || entityUpdate.Epoch != _rooms.EpochOf(playerData.CurrentScene)) {
             if (recordedDeaths.Count == 0) {
                 return;
             }
@@ -960,6 +1075,14 @@ internal abstract class ServerManager : IServerManager {
             _entityData[serverEntityKey] = entityData;
         }
         
+        // A dead entity only comes back in a later life. A host that took the room over before it heard of the death
+        // reports the entity active in the life in which it died, and that report must not bring it back.
+        if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Active) && entityUpdate.IsActive
+            && !_rooms.Revive(playerData.CurrentScene, new EntityLife(entityUpdate.Id, entityUpdate.Life))) {
+            Logger.Info($"Entity {entityUpdate.Id} in {playerData.CurrentScene} stays dead, life {entityUpdate.Life} already ended");
+            entityUpdate.UpdateTypes.Remove(EntityUpdateType.Active);
+        }
+
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Active)) {
             SendDataInSameScene(
                 id,
@@ -968,7 +1091,8 @@ internal abstract class ServerManager : IServerManager {
                     _netServer.GetUpdateManagerForClient(otherId)?.UpdateEntityIsActive(
                         entityUpdate.Id,
                         entityUpdate.IsActive,
-                        entityUpdate.Epoch
+                        entityUpdate.Epoch,
+                        entityUpdate.Life
                     );
                 }
             );
@@ -976,7 +1100,6 @@ internal abstract class ServerManager : IServerManager {
             // Pooled bodies can start another life without receiving a new entity ID.
             if (entityUpdate.IsActive && entityData.IsActive == false) {
                 entityData.GenericData.RemoveAll(data => data.Type == EntityComponentType.Death);
-                _rooms.For(playerData.CurrentScene).Revive(entityUpdate.Id);
             }
             entityData.IsActive = entityUpdate.IsActive;
         }
@@ -989,7 +1112,8 @@ internal abstract class ServerManager : IServerManager {
                     _netServer.GetUpdateManagerForClient(otherId)?.AddEntityData(
                         entityUpdate.Id,
                         entityUpdate.GenericData,
-                        entityUpdate.Epoch
+                        entityUpdate.Epoch,
+                        entityUpdate.Life
                     );
                 }
             );
@@ -1041,7 +1165,8 @@ internal abstract class ServerManager : IServerManager {
                             // Each queue merges into what it holds, so sharing one instance lets a merge change
                             // data another queue is writing, and the receiver cannot parse the result.
                             data.Snapshot(),
-                            entityUpdate.Epoch
+                            entityUpdate.Epoch,
+                            entityUpdate.Life
                         );
                     }
                 );
@@ -1110,6 +1235,14 @@ internal abstract class ServerManager : IServerManager {
         // Keep track of whether the scene that the player has left is now empty
         var isSceneNowEmpty = true;
 
+        // A host that leaves hands the room over before anyone hears it left, so the room is never without a host
+        var change = _rooms.Transfer(
+            sceneName,
+            id,
+            PlayersIn(sceneName).Where(other => other != id),
+            disconnected ? HostChangeReason.Disconnected : HostChangeReason.LeftRoom
+        );
+
         foreach (var idPlayerDataPair in _playerData) {
             if (idPlayerDataPair.Key == id) {
                 continue;
@@ -1126,20 +1259,8 @@ internal abstract class ServerManager : IServerManager {
 
                 var updateManager = _netServer.GetUpdateManagerForClient(idPlayerDataPair.Key);
 
-                // We check if the player is the scene host, which will never be the case if FullSync is disabled
-                if (playerData.IsSceneHost) {
-                    // If the leaving player was the scene host, we can make this player the new scene host
-                    var room = _rooms.For(sceneName);
-                    var epoch = room.BeginHost(idPlayerDataPair.Key);
-                    updateManager.SetSceneHostTransfer(sceneName, true, epoch, room.DeadEntities());
-
-                    // Reset the scene host variable in the leaving player, so only a single other player
-                    // becomes the scene host
-                    playerData.IsSceneHost = false;
-                    
-                    // Also set the player data of the new scene host
-                    otherPlayerData.IsSceneHost = true;
-                    
+                if (change != null && change.NewHost == idPlayerDataPair.Key) {
+                    updateManager.SetSceneHostTransfer(sceneName, true, change.Epoch, change.Dead);
                     Logger.Info($"  {idPlayerDataPair.Key} has become scene host");
                 }
 
@@ -1151,15 +1272,11 @@ internal abstract class ServerManager : IServerManager {
             }
         }
 
-        if (FullSynchronisation) {
-            // In case there were no other players to make scene host, we still need to reset the leaving
-            // player's status of scene host
-            playerData.IsSceneHost = false;
-
-            if (isSceneNowEmpty) {
-                ForgetRoom(sceneName);
-            }
+        if (FullSynchronisation && isSceneNowEmpty) {
+            ForgetRoom(sceneName);
         }
+
+        SyncHostFlags();
 
         if (disconnected) {
             // Now remove the client from the player data mapping
@@ -1187,7 +1304,7 @@ internal abstract class ServerManager : IServerManager {
 
         // The leave-scene handling below runs after the player is removed from the mapping and so never reaches
         // its scene host transfer; without this, a room whose host disconnects freezes for everyone left in it.
-        TransferSceneHost(id, false);
+        TransferSceneHost(id, HostChangeReason.Disconnected);
         _silentPlayers.TryRemove(id, out _);
 
         foreach (var idPlayerDataPair in _playerData) {
@@ -1373,60 +1490,136 @@ internal abstract class ServerManager : IServerManager {
     /// <param name="serverInfo">The server info instance to modify based on whether the client should be accepted
     /// or not.</param>
     private void OnConnectionRequest(NetServerClient netServerClient, ClientInfo clientInfo, ServerInfo serverInfo) {
-        Logger.Info($"Received connection request from IP: {netServerClient.EndPoint}, username: {clientInfo.Username}");
+        Logger.Info($"Received connection request from {netServerClient.EndPoint}, username: {clientInfo.Username}");
 
-        if (_banList.IsIpBanned(netServerClient.EndPoint.Address.ToString()) || _banList.Contains(clientInfo.AuthKey)) {
-            Logger.Debug("  Client is banned from the server, rejected connection");
-
-            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-            serverInfo.ConnectionRejectedMessage = "Banned from the server";
+        var decision = _admission.DecideEntry(AdmissionRequestOf(netServerClient, clientInfo));
+        if (!decision.Accepted) {
+            Logger.Info($"  Connection rejected: {decision.Reason}");
+            Refuse(serverInfo, decision.Reason);
             return;
         }
 
-        if (_whiteList.IsEnabled) {
-            if (!_whiteList.Contains(clientInfo.AuthKey)) {
-                if (!_whiteList.IsPreListed(clientInfo.Username)) {
-                    Logger.Debug("  Client is not whitelisted on the server, rejected connection");
-
-                    serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-                    serverInfo.ConnectionRejectedMessage = "Not whitelisted on the server";
-                    return;
-                }
-
-                Logger.Info("  Username was pre-listed, auth key has been added to whitelist");
-
-                _whiteList.Add(clientInfo.AuthKey);
-                _whiteList.RemovePreList(clientInfo.Username);
-            }
-        }
-        
-        // Check whether the username is valid
-        if (clientInfo.Username.Length > MaxUsernameLength) {
-            Logger.Debug("  Client has username that is too long, rejected connection");
-            
-            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-            serverInfo.ConnectionRejectedMessage = "Invalid username";
+        if (!TryOrderAddons(clientInfo, serverInfo, out var addonOrder)) {
             return;
         }
 
-        foreach (var character in clientInfo.Username) {
-            if (!char.IsLetterOrDigit(character)) {
-                Logger.Debug("  Client has invalid characters in username, rejected connection");
-                
-                serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-                serverInfo.ConnectionRejectedMessage = "Invalid username";
-                return;
-            }
+        if (decision.PromoteFromPreList) {
+            Logger.Info("  Username was pre-listed, auth key has been added to whitelist");
+
+            _whiteList.Add(clientInfo.AuthKey);
+            _whiteList.RemovePreList(clientInfo.Username);
         }
 
-        // A second process may share the same settings and auth key. Never evict a live session on login.
-        if (_playerData.Values.Any(player => string.Equals(player.Username, clientInfo.Username, StringComparison.OrdinalIgnoreCase))) {
-            Logger.Info("Connection rejected: username already in use; existing session preserved");
-            serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
-            serverInfo.ConnectionRejectedMessage = Hkmp.Networking.ConnectionRejection.UsernameInUse;
+        Logger.Debug("  Accepting client connection, preparing server info");
+        FillAcceptance(serverInfo, netServerClient.Id, clientInfo, addonOrder);
+
+        // Send to the other players that this client has just connected
+        foreach (var otherId in _playerData.Keys) {
+            _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
+                netServerClient.Id,
+                clientInfo.Username
+            );
+        }
+
+        // Create new player data and store it
+        var playerData = new ServerPlayerData(
+            netServerClient.Id,
+            netServerClient.EndPoint.Address.ToString(),
+            clientInfo.Username,
+            clientInfo.AuthKey,
+            _authorizedList
+        );
+        _playerData[netServerClient.Id] = playerData;
+
+        try {
+            PlayerConnectEvent?.Invoke(playerData);
+        } catch (Exception e) {
+            Logger.Error($"Exception thrown while invoking PlayerConnect event:\n{e}");
+        }
+    }
+
+    /// <summary>
+    /// Handles a client that presented the token of its live session. Only the version and the bans can keep it
+    /// out, since its place in the game is already its own; on acceptance it gets everything a new client gets.
+    /// </summary>
+    /// <param name="netServerClient">The arriving connection.</param>
+    /// <param name="playerId">The ID of the session's player.</param>
+    /// <param name="clientInfo">The information from the client.</param>
+    /// <param name="serverInfo">The answer to fill in.</param>
+    private void OnResumptionRequest(
+        NetServerClient netServerClient,
+        ushort playerId,
+        ClientInfo clientInfo,
+        ServerInfo serverInfo
+    ) {
+        Logger.Info($"Player {playerId} asks to resume its session from {netServerClient.EndPoint}");
+
+        if (!_playerData.ContainsKey(playerId)) {
+            Refuse(serverInfo, "The session could not be resumed");
             return;
         }
 
+        var decision = _admission.DecideResumption(AdmissionRequestOf(netServerClient, clientInfo));
+        if (!decision.Accepted) {
+            Logger.Info($"  Resumption rejected: {decision.Reason}");
+            Refuse(serverInfo, decision.Reason);
+            return;
+        }
+
+        if (!TryOrderAddons(clientInfo, serverInfo, out var addonOrder)) {
+            return;
+        }
+
+        FillAcceptance(serverInfo, playerId, clientInfo, addonOrder);
+        _playerData[playerId].IpAddressString = netServerClient.EndPoint.Address.ToString();
+    }
+
+    /// <summary>
+    /// Handles a player that took its session back on a new connection. The player keeps its ID and stays in the
+    /// game for everyone else, but its client starts the connection anew and enters its room again, so here it
+    /// leaves its room: another player takes the room over, and the returning player enters it again as a replica.
+    /// </summary>
+    /// <param name="id">The ID of the player.</param>
+    /// <param name="wasSuspended">Whether the session had been suspended.</param>
+    private void OnSessionResumed(ushort id, bool wasSuspended) {
+        Logger.Info($"Player {id} resumed its session (suspended: {wasSuspended})");
+        _silentPlayers.TryRemove(id, out _);
+
+        if (_playerData.TryGetValue(id, out var playerData) && playerData.CurrentScene.Length > 0) {
+            HandlePlayerLeaveScene(id, false);
+        }
+    }
+
+    /// <summary>
+    /// The request the admission policy decides on.
+    /// </summary>
+    private static AdmissionRequest AdmissionRequestOf(NetServerClient netServerClient, ClientInfo clientInfo) {
+        return new AdmissionRequest(
+            clientInfo.ProtocolVersion,
+            clientInfo.AuthKey,
+            clientInfo.Username,
+            netServerClient.EndPoint.Address.ToString()
+        );
+    }
+
+    /// <summary>
+    /// Fills in a refusal with its reason.
+    /// </summary>
+    private static void Refuse(ServerInfo serverInfo, string reason) {
+        serverInfo.ConnectionResult = ServerConnectionResult.RejectedOther;
+        serverInfo.ConnectionRejectedMessage = reason;
+    }
+
+    /// <summary>
+    /// Matches the client's networked addons with the server's. On a mismatch the server info is filled in with the
+    /// server's addons, so the client can tell the player which ones differ.
+    /// </summary>
+    /// <param name="clientInfo">The information from the client.</param>
+    /// <param name="serverInfo">The answer, filled in on a mismatch.</param>
+    /// <param name="addonOrder">The order in which the server assigned IDs to the client's addons.</param>
+    /// <returns>True if the addons match.</returns>
+    private bool TryOrderAddons(ClientInfo clientInfo, ServerInfo serverInfo, out List<byte> addonOrder) {
+        addonOrder = new List<byte>();
         var addonData = clientInfo.AddonData;
 
         // Construct a string that contains all addons and respective versions by mapping the items in the addon data
@@ -1437,13 +1630,10 @@ internal abstract class ServerManager : IServerManager {
         // we can immediately invalidate the request
         if (addonData.Count != AddonManager.GetNetworkedAddonData().Count) {
             Logger.Debug("  Client addons are invalid, rejected connection");
-            
-            HandleInvalidLoginAddons(serverInfo);
-            return;
-        }
 
-        // Create a byte list denoting the order of the addons on the server
-        var addonOrder = new List<byte>();
+            HandleInvalidLoginAddons(serverInfo);
+            return false;
+        }
 
         foreach (var addon in addonData) {
             // Check and retrieve the server addon with the same name and version
@@ -1453,11 +1643,11 @@ internal abstract class ServerManager : IServerManager {
                     out var correspondingServerAddon
                 )) {
                 Logger.Debug("  Client addons are invalid, rejected connection");
-                
+
                 // There was no corresponding server addon, so we send a login response with an invalid status
                 // and the addon data that is present on the server, so the client knows what is invalid
                 HandleInvalidLoginAddons(serverInfo);
-                return;
+                return false;
             }
 
             if (!correspondingServerAddon.Id.HasValue) {
@@ -1467,10 +1657,18 @@ internal abstract class ServerManager : IServerManager {
             // If the addon is also present on the server, we append the addon order with the correct index
             addonOrder.Add(correspondingServerAddon.Id.Value);
         }
-        
-        Logger.Debug("  Accepting client connection, preparing server info");
-        
-        // Finally after all the checks, the client is accepted, and we note that in the server info
+
+        return true;
+    }
+
+    /// <summary>
+    /// Fills in the acceptance of a player: the server's settings, the save and the other players.
+    /// </summary>
+    /// <param name="serverInfo">The answer to fill in.</param>
+    /// <param name="playerId">The ID of the accepted player.</param>
+    /// <param name="clientInfo">The information from the client.</param>
+    /// <param name="addonOrder">The order of the client's addons.</param>
+    private void FillAcceptance(ServerInfo serverInfo, ushort playerId, ClientInfo clientInfo, List<byte> addonOrder) {
         serverInfo.ConnectionResult = ServerConnectionResult.Accepted;
         serverInfo.AddonOrder = addonOrder.ToArray();
 
@@ -1479,47 +1677,22 @@ internal abstract class ServerManager : IServerManager {
         };
 
         serverInfo.FullSynchronisation = FullSynchronisation;
-        
+
         // Construct the player info to send to the new client in the server info
         var playerInfo = new List<(ushort, string)>();
 
         foreach (var idPlayerDataPair in _playerData) {
-            var otherId = idPlayerDataPair.Key;
-            if (otherId == netServerClient.Id) {
+            if (idPlayerDataPair.Key == playerId) {
                 continue;
             }
 
-            var otherPd = idPlayerDataPair.Value;
-
-            playerInfo.Add((otherId, otherPd.Username));
-
-            // Send to the other players that this client has just connected
-            _netServer.GetUpdateManagerForClient(otherId)?.AddPlayerConnectData(
-                netServerClient.Id,
-                clientInfo.Username
-            );
+            playerInfo.Add((idPlayerDataPair.Key, idPlayerDataPair.Value.Username));
         }
 
         serverInfo.PlayerInfo = playerInfo;
 
         // Obtain the save data for the connecting client and add it to the server info
         serverInfo.CurrentSave = ServerSaveData.GetCurrentSaveData(clientInfo.AuthKey);
-
-        // Create new player data and store it
-        var playerData = new ServerPlayerData(
-            netServerClient.Id,
-            netServerClient.EndPoint.ToString(),
-            clientInfo.Username,
-            clientInfo.AuthKey,
-            _authorizedList
-        );
-        _playerData[netServerClient.Id] = playerData;
-        
-        try {
-            PlayerConnectEvent?.Invoke(playerData);
-        } catch (Exception e) {
-            Logger.Error($"Exception thrown while invoking PlayerConnect event:\n{e}");
-        }
     }
 
     /// <summary>
@@ -1535,7 +1708,7 @@ internal abstract class ServerManager : IServerManager {
 
         Logger.Info($"Player {id} stopped sending updates");
         _silentPlayers[id] = 0;
-        TransferSceneHost(id);
+        TransferSceneHost(id, HostChangeReason.Silent);
     }
 
     /// <summary>
@@ -1547,15 +1720,15 @@ internal abstract class ServerManager : IServerManager {
     /// <returns>The death data the room's authority accepted, new or already recorded.</returns>
     private List<EntityNetworkData> RecordDeaths(ushort id, string sceneName, ReliableEntityUpdate entityUpdate) {
         var accepted = new List<EntityNetworkData>();
-        var room = _rooms.For(sceneName);
-        foreach (var data in entityUpdate.GenericData) {
+foreach (var data in entityUpdate.GenericData) {
             if (data.Type != EntityComponentType.Death) {
                 continue;
             }
 
-            if (!room.RecordDeath(id, entityUpdate.Epoch, entityUpdate.Id)) {
+            var death = new EntityLife(entityUpdate.Id, entityUpdate.Life);
+            if (!_rooms.RecordDeath(sceneName, id, entityUpdate.Epoch, death)) {
                 // A repeated report of a death already recorded from this host still reaches the replicas.
-                if (room.IsDead(entityUpdate.Id) && room.HostedIn(id, entityUpdate.Epoch)) {
+                if (_rooms.IsDead(sceneName, death) && _rooms.HostedIn(sceneName, id, entityUpdate.Epoch)) {
                     accepted.Add(data);
                 }
 
@@ -1565,45 +1738,58 @@ internal abstract class ServerManager : IServerManager {
             accepted.Add(data);
 
             // Read from a copy, so the stored and relayed data keeps its own reading position.
-            var death = EntityDeathData.ReadData(new Packet(data.Packet.ToArray()));
-            Logger.Info($"Death of entity {entityUpdate.Id} ({death.EntityType}) in {sceneName} recorded, epoch {entityUpdate.Epoch}");
-            EntityDeathEvent?.Invoke(new EntityDeathEvent(sceneName, entityUpdate.Id, death.EntityType.ToString(),
-                death.EntityName));
+            var deathData = EntityDeathData.ReadData(new Packet(data.Packet.ToArray()));
+            Logger.Info($"Death of entity {entityUpdate.Id} ({deathData.EntityType}) in {sceneName} recorded, epoch {entityUpdate.Epoch}, life {entityUpdate.Life}");
+            EntityDeathEvent?.Invoke(new EntityDeathEvent(sceneName, entityUpdate.Id, deathData.EntityType.ToString(),
+                deathData.EntityName));
         }
 
         return accepted;
     }
 
     /// <summary>
-    /// Move the scene host role of the given player to another player in the same scene, preferring one that is
-    /// still sending updates. Nothing changes when no one else is in the scene.
+    /// Moves the scene host role of the given player to another player in the same room, as the room host
+    /// assignment chooses. Nothing changes when the player does not host its room or no one else is in it.
     /// </summary>
     /// <param name="id">The ID of the current scene host.</param>
-    /// <param name="notifyPrevious">Whether the previous host is still connected and must be told it lost the role.</param>
-    private void TransferSceneHost(ushort id, bool notifyPrevious = true) {
-        if (!FullSynchronisation || !_playerData.TryGetValue(id, out var playerData) || !playerData.IsSceneHost) {
+    /// <param name="reason">Why the role moves; a player that disconnected is not told it lost the role.</param>
+    private void TransferSceneHost(ushort id, HostChangeReason reason) {
+        if (!FullSynchronisation || !_playerData.TryGetValue(id, out var playerData)) {
             return;
         }
 
         var sceneName = playerData.CurrentScene;
-        var candidates = _playerData
-            .Where(pair => pair.Key != id && pair.Value.CurrentScene == sceneName)
-            .OrderBy(pair => _silentPlayers.ContainsKey(pair.Key) ? 1 : 0)
-            .ToList();
-        if (candidates.Count == 0) {
+        var change = _rooms.Transfer(sceneName, id, PlayersIn(sceneName), reason);
+        SyncHostFlags();
+        if (change == null) {
             return;
         }
 
-        var (newHostId, newHost) = (candidates[0].Key, candidates[0].Value);
-        playerData.IsSceneHost = false;
-        newHost.IsSceneHost = true;
-        var room = _rooms.For(sceneName);
-        var epoch = room.BeginHost(newHostId);
-        var dead = room.DeadEntities();
-        _netServer.GetUpdateManagerForClient(newHostId)?.SetSceneHostTransfer(sceneName, true, epoch, dead);
+        _netServer.GetUpdateManagerForClient(change.NewHost)?.SetSceneHostTransfer(sceneName, true, change.Epoch, change.Dead);
         // A stalled host still receives; without this it would keep acting as host once it resumes.
-        if (notifyPrevious) _netServer.GetUpdateManagerForClient(id)?.SetSceneHostTransfer(sceneName, false, epoch, dead);
-        Logger.Info($"Scene host of {sceneName} moved from {id} to {newHostId}");
+        if (reason != HostChangeReason.Disconnected) {
+            _netServer.GetUpdateManagerForClient(id)?.SetSceneHostTransfer(sceneName, false, change.Epoch, change.Dead);
+        }
+
+        Logger.Info($"Scene host of {sceneName} moved from {id} to {change.NewHost}, epoch {change.Epoch}");
+    }
+
+    /// <summary>
+    /// The players whose current scene is the given one.
+    /// </summary>
+    /// <param name="sceneName">The scene.</param>
+    /// <returns>Their IDs.</returns>
+    private IEnumerable<ushort> PlayersIn(string sceneName) {
+        return _playerData.Where(pair => pair.Value.CurrentScene == sceneName).Select(pair => pair.Key).ToList();
+    }
+
+    /// <summary>
+    /// Mirrors the room host assignment on each player's data, which only reports it and never decides it.
+    /// </summary>
+    private void SyncHostFlags() {
+        foreach (var player in _playerData.Values) {
+            player.IsSceneHost = !string.IsNullOrEmpty(player.CurrentScene) && _rooms.IsHost(player.CurrentScene, player.Id);
+        }
     }
 
     /// <summary>
@@ -1826,7 +2012,7 @@ internal abstract class ServerManager : IServerManager {
             return;
         }
 
-        if (!varProps.IgnoreSceneHost && !playerData.IsSceneHost && !isPersistentBoolSet && !isGeoRock) {
+        if (!varProps.IgnoreSceneHost && !_rooms.IsHost(playerData.CurrentScene, id) && !isPersistentBoolSet && !isGeoRock) {
             Logger.Debug("  Player is not scene host, but should be for update, not broadcasting");
             return;
         }
@@ -1915,11 +2101,13 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public IServerPlayer GetPlayer(ushort id) {
+        _netServer.Guard.Check(nameof(GetPlayer));
         return TryGetPlayer(id, out var player) ? player : null;
     }
 
     /// <inheritdoc />
     public bool TryGetPlayer(ushort id, out IServerPlayer player) {
+        _netServer.Guard.Check(nameof(TryGetPlayer));
         var found = _playerData.TryGetValue(id, out var playerData);
         player = playerData;
 
@@ -1944,6 +2132,7 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public void SendMessage(ushort id, string message) {
+        _netServer.Guard.Check(nameof(SendMessage));
         CheckValidMessage(message);
 
         var updateManager = _netServer.GetUpdateManagerForClient(id);
@@ -1957,6 +2146,7 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public void SendMessage(IServerPlayer player, string message) {
+        _netServer.Guard.Check(nameof(SendMessage));
         if (player == null) {
             throw new ArgumentException("Player cannot be null");
         }
@@ -1966,6 +2156,7 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public void BroadcastMessage(string message) {
+        _netServer.Guard.Check(nameof(BroadcastMessage));
         CheckValidMessage(message);
 
         foreach (var player in _playerData.Values) {
@@ -1975,6 +2166,7 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public void ResetSemiPersistentItems() {
+        _netServer.Guard.Check(nameof(ResetSemiPersistentItems));
         var mapping = SaveDataMapping.Instance;
         var removed = 0;
         foreach (var pair in mapping.PersistentBoolVarProperties) {
@@ -1996,6 +2188,7 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public void DisconnectPlayer(ushort id, DisconnectReason reason) {
+        _netServer.Guard.Check(nameof(DisconnectPlayer));
         if (!_playerData.TryGetValue(id, out _)) {
             throw new ArgumentException("There is no player connected with the given ID");
         }
@@ -2005,6 +2198,7 @@ internal abstract class ServerManager : IServerManager {
 
     /// <inheritdoc />
     public void ApplyServerSettings(ServerSettings serverSettings) {
+        _netServer.Guard.Check(nameof(ApplyServerSettings));
         if (serverSettings == null) {
             throw new ArgumentException("Cannot apply null ServerSettings", nameof(serverSettings));
         }

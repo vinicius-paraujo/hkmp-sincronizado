@@ -417,6 +417,20 @@ internal class ConnectInterface {
     }
 
     /// <summary>
+    /// Shows why hosting ended, in the host mode, so the player can host again from where it is; a reason about the
+    /// port marks the port field.
+    /// </summary>
+    /// <param name="key">The text of the reason.</param>
+    internal void ShowHostingFailure(string key) {
+        SetHostMode(true);
+        if (key.StartsWith("hostPort")) {
+            ShowFeedback(Amber, key, _portInput);
+        } else {
+            ShowFeedback(Amber, key);
+        }
+    }
+
+    /// <summary>
     /// Shows a translated message and marks the fields it refers to.
     /// </summary>
     private void ShowFeedback(Color color, string key, params InputComponent[] fields) {

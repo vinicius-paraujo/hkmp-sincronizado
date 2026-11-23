@@ -24,6 +24,20 @@ public class PendingResendsTests {
     }
 
     [Fact]
+    public void ANewConnectionTakesOverWhatTheOldOneStillHadToResend() {
+        var old = new PendingResends<string>();
+        old.Add(1, "a", 100);
+        old.Add(2, "b", 100);
+        _pending.Add(2, "b", 100);
+
+        _pending.TakeFrom(old);
+
+        Assert.Equal(0, old.Count);
+        Assert.Equal(2, _pending.Count);
+        Assert.Equal(new[] { "b", "a" }, Round(1000));
+    }
+
+    [Fact]
     public void AConfirmedPacketIsNotResent() {
         _pending.Add(1, "a", 100);
         Round(1000);

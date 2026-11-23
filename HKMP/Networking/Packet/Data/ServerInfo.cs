@@ -20,6 +20,16 @@ internal class ServerInfo : IPacketData {
     public ServerConnectionResult ConnectionResult { get; set; }
 
     /// <summary>
+    /// The token the client presents to take its session back on a new connection. Only an acceptance has one.
+    /// </summary>
+    public byte[] SessionToken { get; set; } = [];
+
+    /// <summary>
+    /// Whether the acceptance took back a live session, so the player kept its id and its place.
+    /// </summary>
+    public bool Resumed { get; set; }
+
+    /// <summary>
     /// The message detailing why the connection was rejected if it was.
     /// </summary>
     public string ConnectionRejectedMessage { get; set; }
@@ -60,6 +70,9 @@ internal class ServerInfo : IPacketData {
         packet.Write((byte) ConnectionResult);
 
         if (ConnectionResult == ServerConnectionResult.Accepted) {
+            ClientInfo.WriteToken(packet, SessionToken);
+            packet.Write(Resumed);
+
             packet.Write((byte) AddonOrder.Length);
 
             foreach (var addonOrderByte in AddonOrder) {
@@ -105,6 +118,9 @@ internal class ServerInfo : IPacketData {
         ConnectionResult = (ServerConnectionResult) packet.ReadByte();
 
         if (ConnectionResult == ServerConnectionResult.Accepted) {
+            SessionToken = ClientInfo.ReadToken(packet);
+            Resumed = packet.ReadBool();
+
             var addonOrderLength = packet.ReadByte();
             AddonOrder = new byte[addonOrderLength];
 

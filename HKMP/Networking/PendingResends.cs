@@ -31,6 +31,20 @@ internal sealed class PendingResends<T> {
     public void Clear() => _entries.Clear();
 
     /// <summary>
+    /// Moves every entry of the other list to this one, as when a new connection takes over the channel of a session.
+    /// </summary>
+    /// <param name="other">The list to empty.</param>
+    public void TakeFrom(PendingResends<T> other) {
+        foreach (var entry in other._entries) {
+            if (!_entries.Exists(own => own.Sequence == entry.Sequence)) {
+                _entries.Add(entry);
+            }
+        }
+
+        other._entries.Clear();
+    }
+
+    /// <summary>
     /// Remove the entry of a packet that the other side confirmed.
     /// </summary>
     public void Confirm(ushort sequence) {

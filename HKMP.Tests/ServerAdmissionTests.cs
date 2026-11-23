@@ -15,7 +15,13 @@ namespace Hkmp.Tests {
             var sender = Activator.CreateInstance(senderType, new object[] { null });
             var receiver = Activator.CreateInstance(assembly.GetType("Hkmp.Networking.Chunk.ServerChunkReceiver", true), new object[] { null });
             var type = assembly.GetType("Hkmp.Networking.Server.ServerConnectionManager", true);
-            var manager = Activator.CreateInstance(type, new object[] { null, sender, receiver, (ushort) 2 });
+            // The manager reads the client's ID through a function, since a connection that takes over a session
+            // changes its ID, and it takes the factory of its timers and the admission deadline; the thread-pool
+            // timers need no server core.
+            var timers = assembly.GetType("Hkmp.Networking.Timing.SystemUpdateTimerFactory", true)
+                .GetField("Instance", BindingFlags.Public | BindingFlags.Static).GetValue(null);
+            var manager = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null, new[] { null, sender, receiver, (Func<ushort>) (() => 2), timers, TimeSpan.FromSeconds(20) }, null);
             var completed = false;
             var request = type.GetEvent("ConnectionRequestEvent");
             var parameters = request.EventHandlerType.GetMethod("Invoke").GetParameters()

@@ -41,8 +41,7 @@ internal class ClientSettingsInterface {
         ModSettings modSettings,
         ServerSettings clientServerSettings,
         ComponentGroup settingsGroup,
-        ComponentGroup connectGroup,
-        PingInterface pingInterface
+        ComponentGroup connectGroup
     ) {
         settingsGroup.SetActive(false);
 
@@ -98,16 +97,11 @@ internal class ClientSettingsInterface {
         new SettingsEntryInterface(
             settingsGroup,
             new Vector2(x, y),
-            "Display ping",
+            ConnectionFeedback.Get("playerListOption"),
             typeof(bool),
-            false,
-            modSettings.DisplayPing,
-            o => {
-                var newValue = (bool) o;
-                modSettings.DisplayPing = newValue;
-
-                pingInterface.SetEnabled(newValue);
-            },
+            true,
+            modSettings.ShowPlayerList,
+            o => modSettings.ShowPlayerList = (bool) o,
             true
         );
 

@@ -66,12 +66,37 @@ internal class ServerTlsServer : AbstractTlsServer {
     /// </summary>
     private readonly X509Certificate _certificate;
 
-    public ServerTlsServer(TlsCrypto crypto) : base(crypto) {
+    /// <summary>
+    /// The key pair and certificate, loaded once. Every handshake has its own instance of this class, and reading
+    /// the files for each of them would put disk access on the path of every connection.
+    /// </summary>
+    private static (AsymmetricCipherKeyPair KeyPair, X509Certificate Certificate)? _sharedIdentity;
+
+    /// <summary>
+    /// Guards the first load of the shared identity.
+    /// </summary>
+    private static readonly object IdentityLock = new();
+
+    /// <summary>
+    /// The maximum time a handshake can take. A peer that stops answering halfway would otherwise hold its place in
+    /// the admission forever.
+    /// </summary>
+    private readonly TimeSpan _handshakeTimeout;
+
+    public ServerTlsServer(TlsCrypto crypto, TimeSpan handshakeTimeout) : base(crypto) {
+        _handshakeTimeout = handshakeTimeout;
         KeyPairFilePath = Path.Combine(FileUtil.GetCurrentPath(), KeyPairFileName);
         CertificateFilePath = Path.Combine(FileUtil.GetCurrentPath(), CertificateFileName);
-        
-        _keyPair = LoadOrGenerateECDHKeyPair();
-        _certificate = LoadOrGenerateCertificate();
+
+        lock (IdentityLock) {
+            if (_sharedIdentity == null) {
+                _keyPair = LoadOrGenerateECDHKeyPair();
+                _certificate = LoadOrGenerateCertificate();
+                _sharedIdentity = (_keyPair, _certificate);
+            } else {
+                (_keyPair, _certificate) = _sharedIdentity.Value;
+            }
+        }
     }
 
     /// <summary>
@@ -227,6 +252,11 @@ internal class ServerTlsServer : AbstractTlsServer {
         certGenerator.SetNotBefore(DateTime.UtcNow);
         certGenerator.SetPublicKey(subjectPublic);
         return certGenerator.Generate(signatureFactory);
+    }
+
+    /// <inheritdoc />
+    public override int GetHandshakeTimeoutMillis() {
+        return (int) _handshakeTimeout.TotalMilliseconds;
     }
 
     /// <summary>

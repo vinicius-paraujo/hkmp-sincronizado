@@ -10,7 +10,7 @@ internal class ServerPlayerData : IServerPlayer {
     public ushort Id { get; }
 
     /// <inheritdoc />
-    public string IpAddressString { get; }
+    public string IpAddressString { get; internal set; }
 
     /// <inheritdoc />
     public string AuthKey { get; }

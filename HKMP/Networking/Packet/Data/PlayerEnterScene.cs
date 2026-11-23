@@ -108,9 +108,9 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
     public bool SceneHost { get; set; }
 
     /// <summary>
-    /// The position of this decision among the server's scene host decisions for this player.
+    /// The scene this packet describes. A description of a room the player has left since is ignored.
     /// </summary>
-    public uint RoleDecision { get; set; }
+    public string SceneName { get; set; } = "";
 
     /// <summary>
     /// The room's current epoch: the one the player starts as scene host, or the one of the host it joins.
@@ -118,9 +118,10 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
     public uint Epoch { get; set; }
 
     /// <summary>
-    /// The entities of the room the server recorded as dead, which the entering player treats as dead.
+    /// The entities of the room the server recorded as dead, with the life in which each died, which the entering
+    /// player treats as dead.
     /// </summary>
-    public List<ushort> DeadEntities { get; set; } = new List<ushort>();
+    public IReadOnlyList<EntityLife> DeadEntities { get; set; } = new List<EntityLife>();
 
     /// <summary>
     /// Construct the client player already in scene data.
@@ -166,10 +167,10 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
             ReliableEntityUpdateList[i].WriteData(packet);
         }
 
+        packet.Write(SceneName);
         packet.Write(SceneHost);
-        packet.Write(RoleDecision);
         packet.Write(Epoch);
-        EntityIdList.Write(packet, DeadEntities);
+        EntityLifeList.Write(packet, DeadEntities);
     }
 
     /// <inheritdoc />
@@ -222,10 +223,10 @@ internal class ClientPlayerAlreadyInScene : IPacketData {
             ReliableEntityUpdateList.Add(instance);
         }
 
+        SceneName = packet.ReadString();
         SceneHost = packet.ReadBool();
-        RoleDecision = packet.ReadUInt();
         Epoch = packet.ReadUInt();
-        DeadEntities = EntityIdList.Read(packet);
+        DeadEntities = EntityLifeList.Read(packet);
     }
 }
 

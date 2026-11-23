@@ -189,7 +189,7 @@ internal partial class Entity {
             return false;
         }
 
-        // Kept in the log while the cause of an original found alive after its own death is not known.
+        // Logged for every entity taken over, so a trace shows whether the original and the server counted it dead.
         Logger.Info($"  Entity ({Id}, {Type}) at the handover: {health.OriginalState}, known dead: {deaths.Contains(Id)}");
         if (!deaths.Contains(Id) && !health.OriginalDied) {
             return false;

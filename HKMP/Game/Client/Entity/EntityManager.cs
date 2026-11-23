@@ -59,6 +59,10 @@ internal class EntityManager {
         _netClient = netClient;
         _entities = new Dictionary<ushort, Entity>();
         _receivedUpdates = new Queue<BaseEntityUpdate>();
+
+        // Every reliable update this client sends carries the life its entity is in
+        _netClient.UpdateManager.LifeOf = _knownDeaths.LifeOf;
+        _netClient.UpdateManager.BeginLife = _knownDeaths.BeginLife;
     }
 
     /// <summary>
@@ -103,8 +107,8 @@ internal class EntityManager {
     /// entering the room and at each change of scene host, before the role changes.
     /// </summary>
     /// <param name="epoch">The room's current epoch.</param>
-    /// <param name="deadEntities">The entities of the room the server recorded as dead.</param>
-    public void ApplyRoomAuthority(uint epoch, IEnumerable<ushort> deadEntities) {
+    /// <param name="deadEntities">The entities of the room the server recorded as dead, with their lives.</param>
+    public void ApplyRoomAuthority(uint epoch, IEnumerable<EntityLife> deadEntities) {
         RoomEpoch = epoch;
         _netClient.UpdateManager.RoomEpoch = epoch;
         _knownDeaths.Replace(deadEntities);
@@ -346,7 +350,9 @@ internal class EntityManager {
         // first takes the entity over dead.
         if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Data)
             && entityUpdate.GenericData.Exists(data => data.Type == EntityComponentType.Death)) {
-            _knownDeaths.Add(entityUpdate.Id);
+            _knownDeaths.Add(entityUpdate.Id, entityUpdate.Life);
+        } else if (entityUpdate.UpdateTypes.Contains(EntityUpdateType.Active) && entityUpdate.IsActive) {
+            _knownDeaths.Alive(entityUpdate.Id, entityUpdate.Life);
         }
 
         // An update written in an epoch older than the one this client knows comes from a host that lost the room

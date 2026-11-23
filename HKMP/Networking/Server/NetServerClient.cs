@@ -1,35 +1,31 @@
-using System.Collections.Concurrent;
 using System.Net;
 using Hkmp.Networking.Chunk;
 using Hkmp.Networking.Packet;
+using Hkmp.Networking.Timing;
 using Org.BouncyCastle.Tls;
 
 namespace Hkmp.Networking.Server;
 
 /// <summary>
-/// A client managed by the server. This is only used for communication from server to client.
+/// One connection of a client to the server, with its channels. A session uses one connection at a time; when a
+/// client takes its session back on a new connection, the new one carries the session's player id from then on.
 /// </summary>
 internal class NetServerClient {
     /// <summary>
-    /// Concurrent dictionary for the set of IDs that are used. We use a dictionary because there is no
-    /// standard implementation for a concurrent set.
+    /// The ID of the player this connection belongs to. It changes only when the connection takes over a session.
     /// </summary>
-    private static readonly ConcurrentDictionary<ushort, byte> UsedIds = new ConcurrentDictionary<ushort, byte>();
-
-    /// <summary>
-    /// The last ID that was assigned.
-    /// </summary>
-    private static ushort _lastId;
-
-    /// <summary>
-    /// The ID of this client.
-    /// </summary>
-    public ushort Id { get; }
+    public ushort Id { get; private set; }
 
     /// <summary>
     /// Whether the client is registered.
     /// </summary>
     public bool IsRegistered { get; set; }
+
+    /// <summary>
+    /// Whether the server accepted the client's connection request. The server manager adds the player at that
+    /// moment, before the client is registered.
+    /// </summary>
+    public bool IsAccepted { get; set; }
     
     /// <summary>
     /// The update manager for the client.
@@ -51,7 +47,8 @@ internal class NetServerClient {
     public ServerConnectionManager ConnectionManager { get; }
 
     /// <summary>
-    /// The endpoint of the client.
+    /// The endpoint the connection comes from. It is an attribute of the connection only, and never identifies the
+    /// player.
     /// </summary>
     public readonly IPEndPoint EndPoint;
 
@@ -61,40 +58,44 @@ internal class NetServerClient {
     /// <param name="dtlsTransport">The underlying DTLS transport.</param>
     /// <param name="packetManager">The packet manager used on the server.</param>
     /// <param name="endPoint">The endpoint.</param>
-    public NetServerClient(DtlsTransport dtlsTransport, PacketManager packetManager, IPEndPoint endPoint) {
+    /// <param name="id">The player ID the session registry gave the connection.</param>
+    /// <param name="timers">Creates the client's timers, which on the server run on its core.</param>
+    /// <param name="timeouts">The deadlines of the connection.</param>
+    public NetServerClient(
+        DtlsTransport dtlsTransport,
+        PacketManager packetManager,
+        IPEndPoint endPoint,
+        ushort id,
+        IUpdateTimerFactory timers,
+        ConnectionTimeouts timeouts
+    ) {
         EndPoint = endPoint;
 
-        Id = GetId();
-        UpdateManager = new ServerUpdateManager {
+        Id = id;
+        UpdateManager = new ServerUpdateManager(timers, timeouts) {
             DtlsTransport = dtlsTransport
         };
         ChunkSender = new ServerChunkSender(UpdateManager);
         ChunkReceiver = new ServerChunkReceiver(UpdateManager);
-        ConnectionManager = new ServerConnectionManager(packetManager, ChunkSender, ChunkReceiver, Id);
+        ConnectionManager = new ServerConnectionManager(
+            packetManager, ChunkSender, ChunkReceiver, () => Id, timers, timeouts.Admission
+        );
+    }
+
+    /// <summary>
+    /// Makes the connection carry the player ID of the session it takes over.
+    /// </summary>
+    /// <param name="id">The session's player ID.</param>
+    public void TakeOver(ushort id) {
+        Id = id;
     }
 
     /// <summary>
     /// Disconnect the client from the server.
     /// </summary>
     public void Disconnect() {
-        UsedIds.TryRemove(Id, out _);
-
         UpdateManager.StopUpdates();
         ChunkSender.Stop();
         ConnectionManager.StopAcceptingConnection();
-    }
-
-    /// <summary>
-    /// Get a new ID that is not in use by another client.
-    /// </summary>
-    /// <returns>An unused ID.</returns>
-    private static ushort GetId() {
-        ushort newId;
-        do {
-            newId = _lastId++;
-        } while (UsedIds.ContainsKey(newId));
-
-        UsedIds[newId] = 0;
-        return newId;
     }
 }

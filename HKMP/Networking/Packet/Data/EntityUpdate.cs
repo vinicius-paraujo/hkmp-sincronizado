@@ -424,6 +424,12 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
     public uint Epoch { get; set; }
 
     /// <summary>
+    /// The life of the entity in which the sender wrote this update. A death is recorded with its life, and a dead
+    /// entity only comes back in a later one.
+    /// </summary>
+    public ushort Life { get; set; }
+
+    /// <summary>
     /// Construct the reliable entity update data.
     /// </summary>
     public ReliableEntityUpdate() {
@@ -436,6 +442,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
     public override void WriteData(IPacket packet) {
         packet.Write(Id);
         packet.Write(Epoch);
+        packet.Write(Life);
 
         // Construct the byte flag representing update types
         byte updateTypeFlag = 0;
@@ -488,6 +495,7 @@ internal class ReliableEntityUpdate : BaseEntityUpdate {
     public override void ReadData(IPacket packet) {
         Id = packet.ReadUShort();
         Epoch = packet.ReadUInt();
+        Life = packet.ReadUShort();
 
         // Read the byte flag representing update types and reconstruct it
         var updateTypeFlag = packet.ReadByte();

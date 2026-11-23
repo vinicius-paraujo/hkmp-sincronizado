@@ -79,9 +79,12 @@ namespace HkmpServer {
             // TODO: make an event in ServerManager that we can register for so we know when the server shuts down
             consoleInputManager.ConsoleInputEvent += input => {
                 Logger.Info(input);
-                if (!serverManager.TryProcessCommand(new ConsoleCommandSender(), "/" + input)) {
-                    Logger.Info($"Unknown command: {input}");
-                }
+                // Console input arrives on its own thread; commands change server state, so they run on the core
+                netServer.Core.Post(() => {
+                    if (!serverManager.TryProcessCommand(new ConsoleCommandSender(), "/" + input)) {
+                        Logger.Info($"Unknown command: {input}");
+                    }
+                });
             };
             consoleInputManager.Start();
         }

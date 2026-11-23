@@ -89,9 +89,11 @@ internal partial class Entity {
 
             Logger.Info($"Entity '{Object.Host.name}' changed active: {newActive}");
 
+            // Only the game switching an original on again starts a new life; a dead one comes back that way.
             _netClient.UpdateManager.UpdateEntityIsActive(
                 Id,
-                newActive
+                newActive,
+                startsLife: newActive
             );
         }
 

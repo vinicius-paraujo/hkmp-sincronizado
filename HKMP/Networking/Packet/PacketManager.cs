@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Hkmp.Networking.Client.Connection;
 using Hkmp.Logging;
 using Hkmp.Networking.Packet.Connection;
 using Hkmp.Networking.Packet.Data;
@@ -101,6 +102,14 @@ internal class PacketManager {
     /// </summary>
     /// <param name="packet">The client update packet to handle.</param>
     public void HandleClientUpdatePacket(ClientUpdatePacket packet) {
+        foreach (var (packetId, packetData) in packet.GetEarlierResentData()) {
+            ExecuteClientUpdatePacketHandler(packetId, packetData);
+        }
+
+        foreach (var (addonId, packetId, packetData) in packet.GetEarlierResentAddonData()) {
+            ExecuteClientAddonUpdatePacketHandler(addonId, packetId, packetData);
+        }
+
         // Execute corresponding packet handlers for normal packet data
         UnpackPacketDataDict(packet.GetPacketData(), ExecuteClientUpdatePacketHandler);
 
@@ -128,7 +137,7 @@ internal class PacketManager {
         }
 
         // Invoke the packet handler for this ID on the Unity main thread
-        ThreadUtil.RunActionOnMainThread(() => {
+        MainThreadMailbox.Shared.Post(() => {
             try {
                 handler.Invoke(packetData);
             } catch (Exception e) {
@@ -221,7 +230,7 @@ internal class PacketManager {
         }
 
         // Invoke the packet handler for this ID on the Unity main thread
-        ThreadUtil.RunActionOnMainThread(() => {
+        MainThreadMailbox.Shared.Post(() => {
             try {
                 handler.Invoke(packetData);
             } catch (Exception e) {
@@ -288,6 +297,14 @@ internal class PacketManager {
     /// <param name="id">The ID of the client that sent the packet.</param>
     /// <param name="packet">The server update packet.</param>
     public void HandleServerUpdatePacket(ushort id, ServerUpdatePacket packet) {
+        foreach (var (packetId, packetData) in packet.GetEarlierResentData()) {
+            ExecuteServerUpdatePacketHandler(id, packetId, packetData);
+        }
+
+        foreach (var (addonId, packetId, packetData) in packet.GetEarlierResentAddonData()) {
+            ExecuteServerAddonUpdatePacketHandler(id, addonId, packetId, packetData);
+        }
+
         // Execute corresponding packet handlers
         UnpackPacketDataDict(
             packet.GetPacketData(),
@@ -513,7 +530,7 @@ internal class PacketManager {
         }
 
         // Invoke the packet handler on the Unity main thread
-        ThreadUtil.RunActionOnMainThread(() => {
+        MainThreadMailbox.Shared.Post(() => {
             try {
                 handler.Invoke(packetData);
             } catch (Exception e) {
@@ -603,7 +620,7 @@ internal class PacketManager {
         }
 
         // Invoke the packet handler on the Unity main thread
-        ThreadUtil.RunActionOnMainThread(() => {
+        MainThreadMailbox.Shared.Post(() => {
             try {
                 handler.Invoke(packetData);
             } catch (Exception e) {

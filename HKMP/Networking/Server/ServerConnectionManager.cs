@@ -1,10 +1,10 @@
 using System;
-using System.Timers;
 using Hkmp.Logging;
 using Hkmp.Networking.Chunk;
 using Hkmp.Networking.Packet;
 using Hkmp.Networking.Packet.Connection;
 using Hkmp.Networking.Packet.Data;
+using Hkmp.Networking.Timing;
 
 namespace Hkmp.Networking.Server;
 
@@ -22,14 +22,14 @@ internal class ServerConnectionManager : ConnectionManager {
     private readonly ServerChunkReceiver _chunkReceiver;
 
     /// <summary>
-    /// The ID of the client that this class manages.
+    /// The ID of the client that this class manages; it changes when the connection takes over a session.
     /// </summary>
-    private readonly ushort _clientId;
+    private readonly Func<ushort> _clientId;
 
     /// <summary>
     /// Timer that triggers when the connection takes too long and thus times out.
     /// </summary>
-    private readonly Timer _timeoutTimer;
+    private readonly IUpdateTimer _timeoutTimer;
 
     /// <summary>
     /// Event that is called when the client has sent the client info, and thus we can check the connection request.
@@ -44,18 +44,17 @@ internal class ServerConnectionManager : ConnectionManager {
         PacketManager packetManager,
         ServerChunkSender chunkSender,
         ServerChunkReceiver chunkReceiver,
-        ushort clientId
+        Func<ushort> clientId,
+        IUpdateTimerFactory timers,
+        TimeSpan admissionDeadline
     ) : base(packetManager) {
         _chunkSender = chunkSender;
         _chunkReceiver = chunkReceiver;
 
         _clientId = clientId;
 
-        _timeoutTimer = new Timer {
-            Interval = TimeoutMillis,
-            AutoReset = false
-        };
-        _timeoutTimer.Elapsed += (_, _) => ConnectionTimeoutEvent?.Invoke();
+        _timeoutTimer = timers.Create((int) admissionDeadline.TotalMilliseconds, false);
+        _timeoutTimer.Elapsed += () => ConnectionTimeoutEvent?.Invoke();
 
         _chunkReceiver.ChunkReceivedEvent += OnChunkReceived;
     }
@@ -95,12 +94,12 @@ internal class ServerConnectionManager : ConnectionManager {
     /// </summary>
     /// <param name="clientInfo"></param>
     public void ProcessClientInfo(ClientInfo clientInfo) {
-        Logger.Debug($"Received client info from client with ID: {_clientId}");
+        Logger.Debug($"Received client info from client with ID: {_clientId()}");
 
         var serverInfo = new ServerInfo();
 
         try {
-            ConnectionRequestEvent?.Invoke(_clientId, clientInfo, serverInfo);
+            ConnectionRequestEvent?.Invoke(_clientId(), clientInfo, serverInfo);
         } catch (Exception e) {
             Logger.Error($"Exception occurred while executing the connection request event:\n{e}");
         }
@@ -123,10 +122,10 @@ internal class ServerConnectionManager : ConnectionManager {
     private void OnChunkReceived(Packet.Packet packet) {
         var connectionPacket = new ServerConnectionPacket();
         if (!connectionPacket.ReadPacket(packet)) {
-            Logger.Debug($"Received malformed connection packet chunk from client: {_clientId}");
+            Logger.Debug($"Received malformed connection packet chunk from client: {_clientId()}");
             return;
         }
 
-        PacketManager.HandleServerConnectionPacket(_clientId, connectionPacket);
+        PacketManager.HandleServerConnectionPacket(_clientId(), connectionPacket);
     }
 }

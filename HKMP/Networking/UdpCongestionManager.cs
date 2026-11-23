@@ -168,6 +168,22 @@ internal class UdpCongestionManager<TOutgoing, TPacketId>
     /// <summary>
     /// Forget the packets of the previous connection.
     /// </summary>
+    /// <summary>
+    /// The connection that carried the sent packets is gone: the reliable data of each packet not confirmed yet goes
+    /// to be resent on the next connection, and the packets are forgotten, since no acknowledgement for them can come
+    /// through the new one in time to measure anything.
+    /// </summary>
+    public void HandOverUnconfirmed() {
+        foreach (var sentPacket in _sentQueue.Values) {
+            if (!sentPacket.Lost && sentPacket.Packet.ContainsReliableData) {
+                sentPacket.Lost = true;
+                _udpUpdateManager.ResendReliableData(sentPacket.Packet);
+            }
+        }
+
+        _sentQueue.Clear();
+    }
+
     public void Reset() {
         _sentQueue.Clear();
         _firstPacketReceived = false;

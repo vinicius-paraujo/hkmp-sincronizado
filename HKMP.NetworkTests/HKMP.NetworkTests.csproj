@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- Fault-injection checks of the real DTLS transport in the built HKMP.dll. They are kept apart from
+         HKMP.Tests because they open sockets, take minutes and report open defects as failures. -->
+    <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+        <PackageReference Include="xunit" Version="2.9.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+        <!-- Same version as HKMP, so the assembly loaded from HKMP.dll resolves to this one. -->
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- The built assembly, whose internal types the checks reach through InternalsVisibleTo. -->
+        <Reference Include="HKMP">
+            <HintPath>../HKMP/bin/Release/net472/HKMP.dll</HintPath>
+        </Reference>
+        <!-- The server identity HKMP created next to its build; the server reads it from its own folder. -->
+        <None Include="../HKMP/bin/Release/net472/key.pem;../HKMP/bin/Release/net472/cert.cer" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    </ItemGroup>
+</Project>

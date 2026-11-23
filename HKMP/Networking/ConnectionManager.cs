@@ -22,11 +22,6 @@ internal abstract class ConnectionManager {
     public const int MaxChunkSize = MaxSliceSize * MaxSlicesPerChunk;
 
     /// <summary>
-    /// The number of milliseconds a connection attempt can maximally take before being timed out.
-    /// </summary>
-    public const int TimeoutMillis = 60000;
-    
-    /// <summary>
     /// The packet manager instance to register handlers for slice and slice ack data.
     /// </summary>
     protected readonly PacketManager PacketManager;

@@ -62,7 +62,7 @@ namespace HkmpServer {
             base.Initialize();
             
             // Start loading addons
-            AddonManager.LoadAddons();
+            Core.Invoke(AddonManager.LoadAddons);
 
             // Register a callback for when the application is closed to stop the server
             AppDomain.CurrentDomain.ProcessExit += (sender, args) => {
@@ -77,8 +77,8 @@ namespace HkmpServer {
         /// <inheritdoc />
         public override void Start(int port, bool fullSynchronisation) {
             base.Start(port, fullSynchronisation);
-            
-            InitializeSaveFile();
+
+            Core.Invoke(InitializeSaveFile);
         }
 
         /// <inheritdoc />

@@ -36,9 +36,9 @@ internal class ModSettings {
     public string Username { get; set; }
 
     /// <summary>
-    /// Whether to display a UI element for the ping.
+    /// Whether holding the quick map shows the list of connected players and their ping.
     /// </summary>
-    public bool DisplayPing { get; set; }
+    public bool ShowPlayerList { get; set; } = true;
 
     /// <summary>
     /// Set of addon names for addons that are disabled by the user.

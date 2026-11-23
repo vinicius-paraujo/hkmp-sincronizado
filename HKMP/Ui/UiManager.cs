@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using GlobalEnums;
 using Hkmp.Api.Client;
+using Hkmp.Game.Client.Hosting;
 using Hkmp.Game.Settings;
 using Hkmp.Networking.Client;
 using Hkmp.Ui.Chat;
@@ -45,7 +46,7 @@ internal class UiManager : IUiManager {
     /// <summary>
     /// The address to connect to the local device.
     /// </summary>
-    private const string LocalhostAddress = "127.0.0.1";
+    internal const string LocalhostAddress = "127.0.0.1";
 
     /// <summary>
     /// Expression for the GameManager instance.
@@ -76,14 +77,20 @@ internal class UiManager : IUiManager {
     internal static ChatBox InternalChatBox;
     
     /// <summary>
-    /// Event that is fired when a server is requested to be hosted from the UI.
+    /// Event that is fired when the player chose a save to host with. The save is not loaded yet; the request
+    /// carries the action that loads it.
     /// </summary>
-    public event Action<int> RequestServerStartHostEvent;
+    public event Action<HostingRequest> HostRequestedEvent;
 
     /// <summary>
-    /// Event that is fired when a server is requested to be stopped.
+    /// Event that is fired when the player leaves the game, which ends any hosting.
     /// </summary>
     public event Action RequestServerStopHostEvent;
+
+    /// <summary>
+    /// The name and port of a hosting whose save selection is open, or null.
+    /// </summary>
+    private (string Username, int Port)? _pendingHost;
 
     /// <summary>
     /// Event that is fired when a connection is requested with the given username, IP, port and whether it was a
@@ -117,9 +124,14 @@ internal class UiManager : IUiManager {
     private MenuScreen _connectMenu;
     
     /// <summary>
-    /// The ping interface.
+    /// The list of players shown while the quick map is held.
     /// </summary>
-    private PingInterface _pingInterface;
+    private PlayerListInterface _playerList;
+
+    /// <summary>
+    /// Returns the rows of the player list; set by the client manager.
+    /// </summary>
+    public Func<List<(string Name, int? Ping)>> PlayerListSource { get; set; }
     
     /// <summary>
     /// The group that controls the connection UI.
@@ -203,13 +215,13 @@ internal class UiManager : IUiManager {
 
         InternalChatBox = new ChatBox(infoBoxGroup, _modSettings);
 
-        var pingGroup = new ComponentGroup(parent: inGameGroup);
-
-        _pingInterface = new PingInterface(
-            pingGroup,
+        _playerList = new PlayerListInterface(
+            new ComponentGroup(parent: inGameGroup),
             _modSettings,
             _netClient
-        );
+        ) {
+            Source = () => PlayerListSource?.Invoke()
+        };
 
         // Register callbacks to make sure the UI is hidden and shown at correct times
         On.UIManager.SetState += (orig, self, state) => {
@@ -255,14 +267,14 @@ internal class UiManager : IUiManager {
         
         TryAddMultiplayerScreen();
 
+        // The chosen save is only loaded once the server is open and the local client connected, so the
+        // selection hands the loading over instead of letting the game start it.
         _connectInterface.StartHostButtonPressed += (username, port) => {
+            _pendingHost = (username, port);
             OpenSaveSlotSelection(saveSelected => {
                 if (!saveSelected) {
-                    return;
+                    _pendingHost = null;
                 }
-
-                RequestServerStartHostEvent?.Invoke(port);
-                RequestClientConnectEvent?.Invoke(LocalhostAddress, port, username, true);
             });
         };
 
@@ -270,10 +282,12 @@ internal class UiManager : IUiManager {
             RequestClientConnectEvent?.Invoke(address, port, username, false);
         };
 
+        // Hosting learns that the player leaves before the local client disconnects, so the disconnect is not taken
+        // for a failure.
         On.UIManager.ReturnToMainMenu += (orig, self) => {
-            RequestClientDisconnectEvent?.Invoke();
             RequestServerStopHostEvent?.Invoke();
-            
+            RequestClientDisconnectEvent?.Invoke();
+
             return orig(self);
         };
 
@@ -302,9 +316,9 @@ internal class UiManager : IUiManager {
                     // the last save point
                     Logger.Debug("  NextSceneType is main menu, disconnecting because of Steel Soul");
                     
-                    RequestClientDisconnectEvent?.Invoke();
                     RequestServerStopHostEvent?.Invoke();
-                    
+                    RequestClientDisconnectEvent?.Invoke();
+
                     orig(self);
                     return;
                 }
@@ -404,6 +418,10 @@ internal class UiManager : IUiManager {
     /// the save menu.
     /// </summary>
     private void OnStartNewGame(On.GameManager.orig_StartNewGame orig, GameManager self, bool permaDeathMode, bool bossRushMode) {
+        if (HandOverToHosting(true, () => orig(self, permaDeathMode, bossRushMode))) {
+            return;
+        }
+
         orig(self, permaDeathMode, bossRushMode);
         EndSaveSlotSelection(true);
     }
@@ -413,8 +431,61 @@ internal class UiManager : IUiManager {
     /// the save menu.
     /// </summary>
     private void OnContinueGame(On.GameManager.orig_ContinueGame orig, GameManager self) {
+        if (HandOverToHosting(false, () => orig(self))) {
+            return;
+        }
+
         orig(self);
         EndSaveSlotSelection(true);
+    }
+
+    /// <summary>
+    /// Hands the chosen save to hosting instead of loading it, when the selection was opened to host.
+    /// </summary>
+    /// <param name="newGame">Whether the chosen save is a new game.</param>
+    /// <param name="loadSave">Loads the chosen save.</param>
+    /// <returns>Whether the save was handed over; if not, the game loads it as usual.</returns>
+    private bool HandOverToHosting(bool newGame, Action loadSave) {
+        if (_pendingHost is not { } host) {
+            return false;
+        }
+
+        _pendingHost = null;
+        EndSaveSlotSelection(true);
+        HostRequestedEvent?.Invoke(new HostingRequest(host.Port, host.Username, newGame, loadSave));
+        return true;
+    }
+
+    /// <summary>
+    /// Brings the player back to the multiplayer menu after hosting ended, leaving the game first if it had
+    /// loaded, and shows the reason.
+    /// </summary>
+    /// <param name="feedbackKey">The text that tells why hosting ended.</param>
+    /// <param name="fromGame">Whether the game had loaded.</param>
+    public void ReturnToMultiplayerMenu(string feedbackKey, bool fromGame) {
+        // The reason is shown once the menu is up, so it stays on screen for its full time.
+        IEnumerator ShowReasonInMenu() {
+            yield return GoToMultiplayerMenu();
+            _connectInterface.ShowHostingFailure(feedbackKey);
+        }
+
+        void ShowReason() {
+            UM.StartCoroutine(ShowReasonInMenu());
+        }
+
+        if (!fromGame) {
+            ShowReason();
+            return;
+        }
+
+        IH.StopUIInput();
+        UM.StartCoroutine(GM.ReturnToMainMenu(
+            GameManager.ReturnToMainMenuSaveModes.DontSave,
+            _ => {
+                IH.StartUIInput();
+                ShowReason();
+            }
+        ));
     }
 
     /// <summary>
@@ -606,7 +677,6 @@ internal class UiManager : IUiManager {
     /// </summary>
     public void OnSuccessfulConnect() {
         _connectInterface.OnSuccessfulConnect();
-        _pingInterface.SetEnabled(true);
     }
 
     /// <summary>
@@ -622,7 +692,6 @@ internal class UiManager : IUiManager {
     /// </summary>
     public void OnClientDisconnect() {
         _connectInterface.OnClientDisconnect();
-        _pingInterface.SetEnabled(false);
     }
 
     #endregion

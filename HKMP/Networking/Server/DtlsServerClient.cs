@@ -1,5 +1,4 @@
 using System.Net;
-using System.Threading;
 using Org.BouncyCastle.Tls;
 
 namespace Hkmp.Networking.Server;
@@ -16,18 +15,20 @@ internal class DtlsServerClient {
     /// <summary>
     /// The DTLS transport instance.
     /// </summary>
-    public DtlsTransport DtlsTransport { get; init; }
-    /// <summary>
-    /// The server datagram transport. 
-    /// </summary>
-    public ServerDatagramTransport DatagramTransport { get; init; }
+    public DtlsTransport DtlsTransport { get; }
+
     /// <summary>
     /// The IP endpoint of the client.
     /// </summary>
-    public IPEndPoint EndPoint { get; init; }
+    public IPEndPoint EndPoint { get; }
 
     /// <summary>
-    /// The cancellation token source for the "receive loop".
+    /// Construct the client from its encrypted transport and endpoint.
     /// </summary>
-    public CancellationTokenSource ReceiveLoopTokenSource { get; init; }
+    /// <param name="dtlsTransport">The DTLS transport, or null for a client without a session.</param>
+    /// <param name="endPoint">The IP endpoint of the client.</param>
+    public DtlsServerClient(DtlsTransport dtlsTransport, IPEndPoint endPoint) {
+        DtlsTransport = dtlsTransport;
+        EndPoint = endPoint;
+    }
 }

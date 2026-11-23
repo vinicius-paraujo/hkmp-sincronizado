@@ -56,6 +56,7 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
     /// <inheritdoc/>
     public void SendSingleData(TPacketId packetId, IPacketData packetData, ushort playerId) {
+        _netServer.Guard.Check(nameof(SendSingleData));
         if (!_netServer.IsStarted) {
             throw new InvalidOperationException(ServerNotStartedExceptionMsg);
         }
@@ -84,6 +85,7 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
     /// <inheritdoc/>
     public void SendSingleData(TPacketId packetId, IPacketData packetData, params ushort[] playerIds) {
+        _netServer.Guard.Check(nameof(SendSingleData));
         foreach (var playerId in playerIds) {
             SendSingleData(packetId, packetData, playerId);
         }
@@ -91,6 +93,7 @@ internal class ServerAddonNetworkSender<TPacketId> :
 
     /// <inheritdoc/>
     public void BroadcastSingleData(TPacketId packetId, IPacketData packetData) {
+        _netServer.Guard.Check(nameof(BroadcastSingleData));
         if (!_netServer.IsStarted) {
             throw new InvalidOperationException(ServerNotStartedExceptionMsg);
         }
@@ -120,6 +123,7 @@ internal class ServerAddonNetworkSender<TPacketId> :
         TPacketData packetData,
         ushort playerId
     ) where TPacketData : IPacketData, new() {
+        _netServer.Guard.Check(nameof(SendCollectionData));
         if (!_netServer.IsStarted) {
             throw new InvalidOperationException(ServerNotStartedExceptionMsg);
         }
@@ -152,6 +156,7 @@ internal class ServerAddonNetworkSender<TPacketId> :
         TPacketData packetData,
         params ushort[] playerIds
     ) where TPacketData : IPacketData, new() {
+        _netServer.Guard.Check(nameof(SendCollectionData));
         foreach (var playerId in playerIds) {
             SendCollectionData(packetId, packetData, playerId);
         }
@@ -162,6 +167,7 @@ internal class ServerAddonNetworkSender<TPacketId> :
         TPacketId packetId,
         TPacketData packetData
     ) where TPacketData : IPacketData, new() {
+        _netServer.Guard.Check(nameof(BroadcastCollectionData));
         if (!_netServer.IsStarted) {
             throw new InvalidOperationException(ServerNotStartedExceptionMsg);
         }

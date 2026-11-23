@@ -16,6 +16,17 @@ internal class ClientInfo : IPacketData {
     public bool DropReliableDataIfNewerExists => false;
 
     /// <summary>
+    /// The version of the network protocol the client speaks. It comes first, so a server can still read it from a
+    /// client whose other data it would misread.
+    /// </summary>
+    public ushort ProtocolVersion { get; set; } = NetworkProtocol.Version;
+
+    /// <summary>
+    /// The token of the session the client takes back, or none for a new entry.
+    /// </summary>
+    public byte[] SessionToken { get; set; } = [];
+
+    /// <summary>
     /// The username of the client.
     /// </summary>
     public string Username { get; set; }
@@ -32,6 +43,8 @@ internal class ClientInfo : IPacketData {
 
     /// <inheritdoc />
     public void WriteData(IPacket packet) {
+        packet.Write(ProtocolVersion);
+        WriteToken(packet, SessionToken);
         packet.Write(Username);
         packet.Write(AuthKey);
 
@@ -49,6 +62,17 @@ internal class ClientInfo : IPacketData {
 
     /// <inheritdoc />
     public void ReadData(IPacket packet) {
+        ProtocolVersion = packet.ReadUShort();
+        if (ProtocolVersion != NetworkProtocol.Version) {
+            // The rest may be laid out differently; the version alone is enough to tell the client why it is refused.
+            SessionToken = [];
+            Username = "";
+            AuthKey = "";
+            AddonData = [];
+            return;
+        }
+
+        SessionToken = ReadToken(packet);
         Username = packet.ReadString(ServerManager.UsernameMaxLength);
         AuthKey = packet.ReadString();
 
@@ -66,6 +90,38 @@ internal class ClientInfo : IPacketData {
 
             AddonData.Add(new AddonData(id, version));
         }
+    }
+
+    /// <summary>
+    /// Writes a session token as its length and its bytes; a missing token is written as length zero.
+    /// </summary>
+    /// <param name="packet">The packet to write to.</param>
+    /// <param name="token">The token's bytes.</param>
+    internal static void WriteToken(IPacket packet, byte[] token) {
+        token ??= [];
+        packet.Write((byte) token.Length);
+        foreach (var value in token) {
+            packet.Write(value);
+        }
+    }
+
+    /// <summary>
+    /// Reads a session token written by <see cref="WriteToken"/>.
+    /// </summary>
+    /// <param name="packet">The packet to read from.</param>
+    /// <returns>The token's bytes, empty when there is none.</returns>
+    internal static byte[] ReadToken(IPacket packet) {
+        var length = packet.ReadByte();
+        if (length > 64) {
+            throw new ArgumentException("Session token is too long");
+        }
+
+        var token = new byte[length];
+        for (var i = 0; i < length; i++) {
+            token[i] = packet.ReadByte();
+        }
+
+        return token;
     }
 }
 

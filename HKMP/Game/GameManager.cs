@@ -1,4 +1,5 @@
 ﻿using Hkmp.Game.Client;
+using Hkmp.Game.Client.Hosting;
 using Hkmp.Game.Server;
 using Hkmp.Game.Settings;
 using Hkmp.Networking.Client;
@@ -26,6 +27,11 @@ internal class GameManager {
     /// The server manager instance for the mod.
     /// </summary>
     public readonly ModServerManager ServerManager;
+
+    /// <summary>
+    /// Conducts hosting, from the chosen save to the player on its own server.
+    /// </summary>
+    public readonly HostingFlow HostingFlow;
     
     /// <summary>
     /// Constructs this GameManager instance by instantiating all other necessary classes.
@@ -59,7 +65,6 @@ internal class GameManager {
             netServer,
             packetManager,
             serverServerSettings,
-            uiManager,
             modSettings
         );
         ServerManager.Initialize();
@@ -72,5 +77,13 @@ internal class GameManager {
             modSettings
         );
         ClientManager.Initialize(ServerManager);
+
+        HostingFlow = new HostingFlow(
+            new HostedServer(ServerManager),
+            new LocalHostClient(ClientManager, NetClient),
+            new HostScreens(uiManager)
+        );
+        uiManager.HostRequestedEvent += HostingFlow.Host;
+        uiManager.RequestServerStopHostEvent += HostingFlow.Leave;
     }
 }

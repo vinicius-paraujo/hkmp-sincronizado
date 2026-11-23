@@ -12,18 +12,17 @@ public class DeathPacketTests {
     [Fact]
     public void A_change_of_host_carries_the_epoch_and_the_dead_entities() {
         var written = new Packet();
+        var dead = new List<EntityLife> { new(1, 0), new(2, 3), new(8, 1) };
         new HostTransfer {
-            SceneName = "Crossroads_04", IsHost = true, RoleDecision = 7, Epoch = 3,
-            DeadEntities = new List<ushort> { 1, 2, 8 }
+            SceneName = "Crossroads_04", IsHost = true, Epoch = 3, DeadEntities = dead
         }.WriteData(written);
 
         var read = new HostTransfer();
         read.ReadData(Reread(written));
         Assert.Equal("Crossroads_04", read.SceneName);
         Assert.True(read.IsHost);
-        Assert.Equal(7u, read.RoleDecision);
         Assert.Equal(3u, read.Epoch);
-        Assert.Equal(new ushort[] { 1, 2, 8 }, read.DeadEntities);
+        Assert.Equal(dead, read.DeadEntities);
     }
 
     [Fact]
