@@ -332,8 +332,10 @@ internal partial class Entity {
 
         // The game initializes a machine where the room placed the body, and some initializations fix things in
         // the world from there, such as the range a burrowed boss waits on before rising. The first initialization
-        // runs at that place too, and the body goes back to where the handover put it afterwards.
+        // runs at that place too, and the body goes back to where the handover put it afterwards. An
+        // initialization can also set the body's own scale, which the handover already set from the previous host.
         // A body taken out of its parent has no room place in its current space, so it stays where it is.
+        var scale = Object.Host.transform.localScale;
         var placed = initialize && !(_hasParent && _detached) ? MoveToInitialPlace() : (Vector3?) null;
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             InitializeMachine(_fsms.Host[fsmIndex], initialize);
@@ -341,6 +343,7 @@ internal partial class Entity {
         if (placed.HasValue) {
             SetPlace(placed.Value);
         }
+        Object.Host.transform.localScale = scale;
 
         for (var fsmIndex = 0; fsmIndex < _fsms.Host.Count; fsmIndex++) {
             Logger.Debug($"    Restoring FSM: {_fsms.Host[fsmIndex].Fsm.Name}");
