@@ -148,6 +148,8 @@ internal class ConnectInterface {
                 var message = ((ConnectionFailedMessageResult) result).Message;
                 if (message == ConnectionRejection.UsernameInUse) {
                     ShowFeedback(Amber, "nameInUse", _usernameInput);
+                } else if (message == ConnectionRejection.IdentityInUse) {
+                    ShowFeedback(Amber, "identityInUse");
                 } else {
                     // Addons can reject with any text, so it stays in the log and the player gets a translated line
                     Logger.Info($"Connection rejected: {message}");

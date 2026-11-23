@@ -213,7 +213,7 @@ public class SessionTests {
         rules.NameInUse = false;
 
         rules.LiveSession = true;
-        Assert.Equal(ConnectionRejection.UsernameInUse, policy.DecideEntry(Request()).Reason);
+        Assert.Equal(ConnectionRejection.IdentityInUse, policy.DecideEntry(Request()).Reason);
         rules.LiveSession = false;
 
         rules.Whitelist = true;

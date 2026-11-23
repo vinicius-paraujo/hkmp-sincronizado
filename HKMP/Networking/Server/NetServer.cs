@@ -615,7 +615,9 @@ internal class NetServer : INetServer {
 
             EndConnection(client);
 
-            if (serverInfo.ConnectionRejectedMessage != ConnectionRejection.UsernameInUse) {
+            // Both are fixed by the player at once, by another name or by closing the other game.
+            if (serverInfo.ConnectionRejectedMessage != ConnectionRejection.UsernameInUse
+                && serverInfo.ConnectionRejectedMessage != ConnectionRejection.IdentityInUse) {
                 Throttle(client.EndPoint);
             }
         }));

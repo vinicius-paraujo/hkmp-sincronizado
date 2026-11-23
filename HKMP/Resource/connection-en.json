@@ -14,6 +14,7 @@
   "connected": "Connected.",
   "noResponse": "Could not reach the server. Check the address and port.",
   "nameInUse": "This name is already in use. Choose another.",
+  "identityInUse": "Another game with your identity is already in the session. Copies on one Windows account share it.",
   "versionMismatch": "Your version does not match the server. Update Sincroniza.",
   "internalError": "The connection failed. Try again.",
   "rejected": "The server refused the connection.",

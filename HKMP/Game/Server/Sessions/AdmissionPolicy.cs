@@ -143,9 +143,14 @@ internal sealed class AdmissionPolicy
 
         // A second game with the same settings must not take the place of the player already in. A suspended
         // session of the same key was ended before this decision, so a live one here still sends.
-        if (_rules.IsNameInUse(request.Username) || _rules.HasLiveSession(request.Identity))
+        if (_rules.IsNameInUse(request.Username))
         {
             return AdmissionDecision.Refuse(ConnectionRejection.UsernameInUse);
+        }
+
+        if (_rules.HasLiveSession(request.Identity))
+        {
+            return AdmissionDecision.Refuse(ConnectionRejection.IdentityInUse);
         }
 
         return promote ? new AdmissionDecision(true, null, true) : AdmissionDecision.Accept;
