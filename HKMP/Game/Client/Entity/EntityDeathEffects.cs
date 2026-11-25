@@ -49,6 +49,9 @@ internal static class EntityDeathEffects {
             case EntityType.LostKin:
                 corpseName = "Corpse Infected Knight Dream(Clone)";
                 break;
+            case EntityType.SpinyHusk:
+                corpseName = "Corpse Garden Zombie(Clone)";
+                break;
             default:
                 return;
         }

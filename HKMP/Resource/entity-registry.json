@@ -990,6 +990,10 @@
         "fsm_name": "Attack"
     },
     {
+        "base_object_name": "Corpse Garden Zombie",
+        "type": "SpinyHuskCorpse"
+    },
+    {
         "base_object_name": "Grass Hopper",
         "type": "Loodle",
         "fsm_name": "Crazy Hopper",

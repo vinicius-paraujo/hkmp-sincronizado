@@ -249,5 +249,7 @@ internal enum EntityType {
     HornetNeedle,
     // What the nail strikes on Hornet's needle. Its machine detaches it and the needle once, when the needle is first
     // switched on, and then follows the needle; as an entity it is resumed following instead of detaching again.
-    HornetNeedleTink
+    HornetNeedleTink,
+    // The Spiny Husk's corpse, which has health and bursts into spines that hurt the knight. It has no FSM.
+    SpinyHuskCorpse
 }
