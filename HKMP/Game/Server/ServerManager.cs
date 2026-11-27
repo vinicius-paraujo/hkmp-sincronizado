@@ -1468,8 +1468,18 @@ internal abstract class ServerManager : IServerManager {
     /// Callback method for when the server is shut down.
     /// </summary>
     private void OnServerShutdown() {
-        // Clear all existing player data
+        // Every player still connected leaves with the server. Addons forget a player only on this event, so without
+        // it they would keep the players of this run into the next one the same process hosts.
+        var players = _playerData.Values.ToList();
         _playerData.Clear();
+
+        foreach (var playerData in players) {
+            try {
+                PlayerDisconnectEvent?.Invoke(playerData);
+            } catch (Exception e) {
+                Logger.Error($"Exception thrown while invoking PlayerDisconnect event on shutdown:\n{e}");
+            }
+        }
     }
 
     /// <summary>
