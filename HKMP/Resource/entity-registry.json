@@ -15,10 +15,6 @@
         "fsm_name": "Control"
     },
     {
-        "base_object_name": "CameraLockArea",
-        "type": "CameraLockArea"
-    },
-    {
         "base_object_name": "Ruins Lift",
         "type": "CityElevator",
         "fsm_name": "Lift Control"
