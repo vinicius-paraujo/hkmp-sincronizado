@@ -11,14 +11,12 @@ internal sealed class RoleOrder {
     private uint _roleEpoch;
 
     /// <summary>
-    /// The client entered a room. Decisions about earlier rooms no longer apply.
+    /// The client entered a room. Decisions about earlier rooms, and about earlier visits to this one, no longer apply.
+    /// Loading the same scene again is a new visit: a player returning to the room it died in must receive the
+    /// description of the players already there.
     /// </summary>
     /// <param name="scene">The scene of the room.</param>
     public void EnterRoom(string scene) {
-        if (scene == _scene) {
-            return;
-        }
-
         _scene = scene;
         _roomApplied = false;
         _roleEpoch = 0;

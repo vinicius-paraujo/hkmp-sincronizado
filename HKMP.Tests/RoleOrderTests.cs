@@ -80,6 +80,16 @@ public class RoleOrderTests {
     }
 
     [Fact]
+    public void LoadingTheSameRoomAgainAcceptsItsNewDescription() {
+        _order.AcceptRole(Room, 9, true);
+        _order.AcceptRoom(Room);
+        _order.EnterRoom(Room);
+
+        Assert.True(_order.AcceptRoom(Room));
+        Assert.True(_order.AcceptRole(Room, 9, false));
+    }
+
+    [Fact]
     public void ANewConnectionStartsOver() {
         _order.AcceptRole(Room, 9, true);
         _order.AcceptRoom(Room);
