@@ -78,7 +78,8 @@ internal class EntityManager {
     public void RegisterHooks() {
         FsmActionHooks.RegisterHooks();
         MusicComponent.RegisterHooks();
-        
+        ReplicaOriginals.RegisterHooks();
+
         EntityFsmActions.EntitySpawnEvent += OnGameObjectSpawned;
         UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
         UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneChanged;
@@ -92,7 +93,8 @@ internal class EntityManager {
     public void DeregisterHooks() {
         FsmActionHooks.DeregisterHooks();
         MusicComponent.DeregisterHooks();
-        
+        ReplicaOriginals.DeregisterHooks();
+
         EntityFsmActions.EntitySpawnEvent -= OnGameObjectSpawned;
         UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
         UnityEngine.SceneManagement.SceneManager.activeSceneChanged -= OnSceneChanged;

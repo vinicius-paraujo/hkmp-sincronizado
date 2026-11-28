@@ -701,12 +701,24 @@ internal partial class Entity {
     /// </summary>
     private void SwitchRole(bool host) {
         _role = host ? _host : _isSceneHostDetermined ? (Role)_replica : _undetermined;
+
+        // The original stays off only while the replica follows another player's room.
+        if (Object?.Host == null) {
+            return;
+        }
+
+        if (_role == _replica && !KeepsOriginalRunning) {
+            ReplicaOriginals.Add(Object.Host);
+        } else {
+            ReplicaOriginals.Remove(Object.Host);
+        }
     }
     /// <summary>
     /// Destroys the entity.
     /// </summary>
     public void Destroy() {
         MonoBehaviourUtil.Instance.OnUpdateEvent -= OnUpdate;
+        ReplicaOriginals.Remove(Object.Host);
         RegisteredEntities.Remove(Object.Host);
         RegisteredEntities.Remove(Object.Client);
         On.tk2dSpriteAnimator.Play_tk2dSpriteAnimationClip_float_float -= OnAnimationPlayed;
